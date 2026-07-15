@@ -1,6 +1,7 @@
 import os
 import logging
 import socket
+import sys
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -33,16 +34,6 @@ KNOWLEDGE_BASE = """
 3. **Brasilidade:** Iniciativas que desconsiderem o contexto regional brasileiro ou prejudiquem a presença da Azul em qualquer região do país devem ser questionadas.
 """
 
-SYSTEM_PROMPT = f"""
-Você é o Agente de Governança de Marca da Azul Linhas Aéreas (Azul Brand Co-Pilot).
-Sua função é analisar iniciativas de negócio propostas pelas Unidades de Negócio (BUs)
-e avaliar seu impacto na marca, riscos reputacionais e alinhamento estratégico.
-
-{KNOWLEDGE_BASE}
-
-Retorne um JSON válido com os campos: alinhamento_identidade, fit_publico, maturidade_contexto, precedentes_historicos, risco_reputacional e recomendacao.
-"""
-
 CREATE_ALLOWED_ROLES = {"coordenador", "gerente", "diretor", "executivo", "vp_superintendente"}
 
 
@@ -50,7 +41,7 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def analyze_with_llm(bu_name: str, project_idea: str) -> dict:
+def analyze_by_keywords(bu_name: str, project_idea: str) -> dict:
     logger.info("Analisando iniciativa | BU: %s | Ideia: %.80s...", bu_name, project_idea)
 
     idea_lower = project_idea.lower()
@@ -672,7 +663,7 @@ def projects():
         existing.setdefault("relatedProjects", []).append({"id": new_project['id'], "title": new_project['title'], "similarity": match['similarity']})
         existing['similarityScore'] = max(existing.get('similarityScore', 0), match['similarity'])
         existing['similarityType'] = "Projeto quase idêntico" if existing['similarityScore'] >= 70 else "Objetivos parecidos" if existing['similarityScore'] >= 40 else "Leves similaridades"
-        existing['marketingAlert'] = existing.get('marketingAlert', False) or True
+        existing['marketingAlert'] = existing.get('marketingAlert', False) or (match['similarity'] >= 50)
         existing['alertReason'] = "Projeto semelhante encontrado; revisar com as áreas envolvidas."
         existing['alertSeverity'] = "MÉDIA"
         existing.setdefault('similarityMatches', []).append({'id': new_project['id'], 'title': new_project['title'], 'similarity': match['similarity'], 'org': organization})
@@ -721,20 +712,38 @@ def serve_asset(filename: str):
 
 
 def find_available_port(start_port: int) -> int:
+    """Tenta ligar na porta `start_port`.
+
+    Comportamento padrão: se a porta estiver em uso, aborta imediatamente com
+    uma exceção para deixar explícito ao chamador que a porta requisitada
+    não está disponível. Para permitir fallback automático para a próxima
+    porta livre, exporte `PORT_FALLBACK=true` no ambiente.
+    """
+    fallback = os.environ.get("PORT_FALLBACK", "false").lower() == "true"
     port = start_port
-    while True:
+    max_port = start_port + 1000
+    while port <= max_port:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 sock.bind(("0.0.0.0", port))
                 return port
             except OSError:
+                if not fallback:
+                    logger.error("Port %s already in use and PORT_FALLBACK not set. Aborting.", start_port)
+                    raise RuntimeError(f"Port {start_port} already in use.")
                 port += 1
+    raise RuntimeError(f"Could not find an available port in range {start_port}-{max_port}.")
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5001))
-    port = find_available_port(port)
+    try:
+        port = find_available_port(port)
+    except RuntimeError as exc:
+        logger.error(str(exc))
+        logger.info("To allow automatic fallback to a free port, set PORT_FALLBACK=true")
+        sys.exit(1)
     debug = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
     logger.info("Iniciando servidor em http://0.0.0.0:%s (debug=%s)", port, debug)
     # Evita que o reloader do Werkzeug reinicie o processo em outra porta automaticamente.

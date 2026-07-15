@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Azul Copilot",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/azul-copilot/app.py",
+      "cwd": "${workspaceFolder}/azul-copilot",
+      "console": "integratedTerminal",
+      "env": {
+        "PORT": "5001"
+      },
+      "justMyCode": false
+    }
+  ]
+}
