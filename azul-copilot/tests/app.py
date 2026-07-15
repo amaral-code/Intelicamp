@@ -8,5 +8,3 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 app = getattr(module, "app")
-real_module = module
-

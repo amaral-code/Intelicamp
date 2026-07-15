@@ -4,9 +4,6 @@ import socket
 import sys
 from datetime import datetime, timezone
 from uuid import uuid4
-import urllib.request
-import json
-import re
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -18,29 +15,6 @@ CORS(app)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Carrega as variáveis do arquivo .env manualmente
-def load_dotenv():
-    # Procura pelo .env no diretório pai ou no atual
-    paths = [
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"),
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"),
-        ".env"
-    ]
-    for path in paths:
-        if os.path.exists(path):
-            logger.info("Carregando variáveis de ambiente de %s", path)
-            with open(path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#") and "=" in line:
-                        k, v = line.split("=", 1)
-                        os.environ[k.strip()] = v.strip().strip('"').strip("'")
-            break
-
-load_dotenv()
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-
 
 KNOWLEDGE_BASE = """
 ## BASE DE CONHECIMENTO — CASOS E PRECEDENTES DA AZUL
@@ -147,10 +121,6 @@ def analyze_by_keywords(bu_name: str, project_idea: str) -> dict:
         "risco_reputacional": risk,
         "recomendacao": recommendation,
     }
-
-
-def analyze_with_llm(bu_name: str, project_idea: str) -> dict:
-    return analyze_by_keywords(bu_name, project_idea)
 
 
 def mentor_project(bu_name: str, project_idea: str) -> dict:
@@ -313,11 +283,11 @@ PROJECTS = [
         "org": "Azul Viagens",
         "areas": ["Marketing", "Produtos"],
         "ownerRole": "Gerente",
-        "createdBy": {"userId": "u1", "userName": "Carla Nogueira"},
+        "similarityScore": 24,
+        "similarityType": "Leves similaridades",
         "marketingAlert": False,
         "alertReason": "Sem alertas críticos. O projeto respeita os pilares de conectividade, atendimento humanizado e brasilidade. Monitoramento de rotina recomendado.",
         "alertSeverity": "BAIXA",
-        "similarityAlerts": [],
         "comments": [
             {"id": "c1", "author": "Bruna", "role": "Analista", "text": "Gostei do foco nas rotas regionais. Podemos incorporar uma nota de brasilidade no posicionamento."}
         ],
@@ -326,10 +296,7 @@ PROJECTS = [
         "votes": [
             {"userId": "u1", "userName": "Carla Nogueira", "role": "Gerente", "vote": "qualificado", "timestamp": "2026-07-11T10:00:00Z"},
             {"userId": "u3", "userName": "Ana Beatriz", "role": "Diretor", "vote": "qualificado", "timestamp": "2026-07-11T14:30:00Z"},
-        ],
-        "aiEvaluation": None,
-        "aiClassificacao": "Não avaliado",
-        "aiScore": None,
+        ]
     },
     {
         "id": "proj-002",
@@ -338,11 +305,11 @@ PROJECTS = [
         "org": "Azul Conecta",
         "areas": ["TI", "Customer Experience"],
         "ownerRole": "Analista",
-        "createdBy": {"userId": "u5", "userName": "Juliana Souza"},
+        "similarityScore": 68,
+        "similarityType": "Objetivos parecidos",
         "marketingAlert": True,
         "alertReason": "ALERTA DE IMAGEM: O projeto menciona chatbot, sac. Impacto potencial: percepção negativa do cliente sobre o atendimento humanizado da Azul. Ação necessária: garantir que o atendimento humano seja preservado como alternativa.",
         "alertSeverity": "MÉDIA",
-        "similarityAlerts": [],
         "comments": [
             {"id": "c2", "author": "Mateus", "role": "Gerente", "text": "A proposta precisa deixar claro que o canal humano não será removido."}
         ],
@@ -356,10 +323,7 @@ PROJECTS = [
             {"userId": "u3", "userName": "Ana Beatriz", "role": "Diretor", "vote": "nao_qualificado", "timestamp": "2026-07-14T10:00:00Z"},
             {"userId": "u8", "userName": "Luciana Rocha", "role": "VP / Superintendente", "vote": "nao_qualificado", "timestamp": "2026-07-14T16:00:00Z"},
             {"userId": "u5", "userName": "Juliana Souza", "role": "Especialista", "vote": "qualificado", "timestamp": "2026-07-15T08:00:00Z"},
-        ],
-        "aiEvaluation": None,
-        "aiClassificacao": "Não avaliado",
-        "aiScore": None,
+        ]
     },
 ]
 
@@ -454,14 +418,23 @@ def find_similar_projects(project: dict, all_projects: list[dict]) -> dict:
             matches.append({
                 'id': candidate['id'],
                 'title': candidate['title'],
-                'summary': candidate.get('summary', ''),
                 'similarity': similarity,
                 'org': candidate['org'],
-                'createdBy': candidate.get('createdBy', {}),
             })
 
+    if not matches:
+        return {
+            'hasSimilarProjects': False,
+            'similarityScore': 0,
+            'notifications': ['marketing'],
+            'matches': [],
+        }
+
+    best = max(matches, key=lambda item: item['similarity'])
     return {
-        'hasSimilarProjects': len(matches) > 0,
+        'hasSimilarProjects': True,
+        'similarityScore': best['similarity'],
+        'notifications': ['marketing', 'owners'],
         'matches': matches,
     }
 
@@ -475,19 +448,17 @@ def compute_project_qualification(project: dict) -> dict:
     director_qualificado = [v for v in votes if v["vote"] == "qualificado" and v.get("role") in ("Diretor", "Executivo", "VP / Superintendente")]
     director_nao_qualificado = [v for v in votes if v["vote"] == "nao_qualificado" and v.get("role") in ("Diretor", "Executivo", "VP / Superintendente")]
 
-    if total_votes == 0:
-        status = "pending"
-        status_message = "Aguardando feedback de revisão."
-    else:
-        status = "revisao"
-        status_message = "Os votos funcionam como feedback de revisão e não definem aprovação automática."
+    status = "pending"
+    if qualificado_count >= 5:
+        status = "qualificado"
+    elif nao_qualificado_count >= 5:
+        status = "nao_qualificado"
 
     return {
         "qualificado": qualificado_count,
         "nao_qualificado": nao_qualificado_count,
         "total": total_votes,
         "status": status,
-        "status_message": status_message,
         "director_qualificado": [{"userName": v["userName"], "role": v["role"]} for v in director_qualificado],
         "director_nao_qualificado": [{"userName": v["userName"], "role": v["role"]} for v in director_nao_qualificado],
     }
@@ -536,173 +507,9 @@ def get_qualification(project_id: str):
     return jsonify({"qualification": qualification, "project": project}), 200
 
 
-def _call_gemini(system_instruction: str, user_text: str) -> str | None:
-    if not GEMINI_API_KEY:
-        logger.warning("GEMINI_API_KEY não configurada")
-        return None
-
-    model_name = "models/gemma-4-26b-a4b-it"
-    url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent?key={GEMINI_API_KEY}"
-
-    payload = {
-        "systemInstruction": {"parts": [{"text": system_instruction}]},
-        "contents": [{"role": "user", "parts": [{"text": user_text}]}]
-    }
-
-    try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req, timeout=60) as response:
-            res_data = json.loads(response.read().decode())
-            candidates = res_data.get("candidates", [])
-            if not candidates:
-                return None
-
-            parts = candidates[0].get("content", {}).get("parts", [{}])
-            raw_text = "".join(p.get("text", "") for p in parts if not p.get("thought", False))
-
-            match = re.search(r'<response>(.*?)</response>', raw_text, re.DOTALL | re.IGNORECASE)
-            if match:
-                return match.group(1).strip()
-            elif "<response>" in raw_text.lower():
-                split_parts = re.split(r'<response>', raw_text, flags=re.IGNORECASE)
-                return split_parts[-1].strip()
-            return raw_text.strip() or None
-    except Exception as e:
-        logger.error("Erro na chamada da API Gemini: %s", str(e))
-        return None
-
-
-def evaluate_project_with_gemini(project: dict) -> dict:
-    title = project.get("title", "")
-    summary = project.get("summary", "")
-
-    system = (
-        "Você é o analista de governança de marca da Azul Linhas Aéreas.\n"
-        "Sua função é avaliar projetos propostos sob a lente dos guardrails de marca.\n"
-        f"{KNOWLEDGE_BASE}\n\n"
-        "Com base na BASE DE CONHECIMENTO acima, avalie o projeto proposto e retorne APENAS um JSON válido dentro da tag <response> com a seguinte estrutura:\n"
-        '{\n'
-        '  "classificacao": "APROVADO" | "APROVAÇÃO CONDICIONAL" | "BLOQUEADO",\n'
-        '  "score": 0-100,\n'
-        '  "justificativa": "texto curto explicando a decisão",\n'
-        '  "plano_acao": "texto curto com recomendações"\n'
-        '}\n\n'
-        "Regras:\n"
-        "- Score >= 70: APROVADO\n"
-        "- Score entre 40 e 69: APROVAÇÃO CONDICIONAL\n"
-        "- Score < 40: BLOQUEADO\n"
-        "- Se houver risco de conectividade ou atendimento humanizado, o score deve ser reduzido significativamente.\n"
-        "- Se o projeto mencionar brasilidade ou inovação positiva, considere um bônus de até 10 pontos.\n"
-        "- Seja rigoroso: projetos que repetem erros do Caso 001 (corte de conectividade sem consulta ao Marketing) devem ser BLOQUEADOS."
-    )
-
-    user_text = f"Título: {title}\nResumo: {summary}"
-
-    result_text = _call_gemini(system, user_text)
-    if result_text:
-        try:
-            parsed = json.loads(result_text)
-            return {
-                "classificacao": parsed.get("classificacao", "APROVAÇÃO CONDICIONAL"),
-                "score": int(parsed.get("score", 50)),
-                "justificativa": parsed.get("justificativa", ""),
-                "plano_acao": parsed.get("plano_acao", ""),
-            }
-        except (_json.JSONDecodeError, ValueError, TypeError):
-            logger.warning("Falha ao interpretar resposta do Gemini como JSON: %.200s", result_text)
-            return None
-    return None
-
-
 @app.route("/api/health", methods=["GET"])
 def health_check():
     return jsonify({"status": "ok", "agent": "OmniBridge Brand Co-Pilot v1.1"}), 200
-
-
-@app.route("/api/chat", methods=["POST"])
-def chat():
-    if not GEMINI_API_KEY:
-        return jsonify({"error": "Configuração da API Key do Gemini (.env) não encontrada."}), 500
-
-    body = request.get_json(silent=True) or {}
-    message = body.get("message", "").strip()
-    history = body.get("history", [])
-
-    if not message:
-        return jsonify({"error": "A mensagem não pode estar vazia."}), 400
-
-    contents = []
-    for msg in history:
-        role = msg.get("role")
-        content = msg.get("content", "")
-        if role in ("user", "model") and content:
-            contents.append({
-                "role": role,
-                "parts": [{"text": content}]
-            })
-
-    contents.append({
-        "role": "user",
-        "parts": [{"text": message}]
-    })
-
-    system_instruction = (
-        "Você é o OmniBridge Assist, o assistente inteligente da plataforma OmniBridge da Azul.\n"
-        "Seu objetivo é ajudar os colaboradores da Azul a entenderem os guardrails de marca e alinhar/validar suas propostas de projetos.\n"
-        "Use a seguinte Base de Conhecimento para fundamentar suas respostas:\n"
-        f"{KNOWLEDGE_BASE}\n\n"
-        "Instruções:\n"
-        "- Responda em português de forma amigável, clara e concisa.\n"
-        "- Seja muito direto e evite reflexões longas no seu raciocínio.\n"
-        "- Se o usuário propor uma ideia de projeto, avalie-a sob a lente dos guardrails de marca e cite o Caso 001 ou outros guardrails se aplicável.\n"
-        "- Você DEVE envolver estritamente a resposta final que será exibida para o usuário dentro da tag <response>...</response>."
-    )
-
-    payload = {
-        "systemInstruction": {
-            "parts": [{"text": system_instruction}]
-        },
-        "contents": contents
-    }
-
-    model_name = "models/gemma-4-26b-a4b-it"
-    url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent?key={GEMINI_API_KEY}"
-
-    try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req, timeout=60) as response:
-            res_data = json.loads(response.read().decode())
-            
-            candidates = res_data.get("candidates", [])
-            if not candidates:
-                return jsonify({"error": "Nenhuma resposta gerada pelo modelo."}), 500
-            
-            parts = candidates[0].get("content", {}).get("parts", [{}])
-            raw_text = "".join(p.get("text", "") for p in parts if not p.get("thought", False))
-            
-            match = re.search(r'<response>(.*?)</response>', raw_text, re.DOTALL | re.IGNORECASE)
-            if match:
-                bot_message = match.group(1).strip()
-            elif "<response>" in raw_text.lower():
-                parts = re.split(r'<response>', raw_text, flags=re.IGNORECASE)
-                bot_message = parts[-1].strip()
-            else:
-                bot_message = raw_text.strip()
-                
-            return jsonify({"response": bot_message}), 200
-
-    except Exception as e:
-        logger.error("Erro na chamada da API Gemini: %s", str(e))
-        return jsonify({"error": f"Falha na comunicação com o assistente: {str(e)}"}), 500
-
 
 
 @app.route("/api/analyze", methods=["POST"])
@@ -773,14 +580,14 @@ def login():
 
     role_lower = role_level.lower().replace("vp / superintendente", "vp_superintendente")
     is_marketing_area = area.lower() == "marketing"
-    user_id = f"user-{uuid4().hex[:6]}"
+    high_roles = {"coordenador", "supervisor", "gerente", "diretor", "executivo", "vp_superintendente"}
     user = {
-        "id": user_id,
+        "id": f"user-{uuid4().hex[:6]}",
         "name": name,
         "roleLevel": role_level,
         "organization": organization,
         "area": area,
-        "isMarketing": is_marketing_area,
+        "isMarketing": is_marketing_area or role_lower in high_roles,
         "canCreate": role_lower in CREATE_ALLOWED_ROLES,
     }
     return jsonify({"user": user, "projects": PROJECTS, "users": USERS}), 200
@@ -791,20 +598,18 @@ def projects():
     if request.method == "GET":
         sort_by = request.args.get("sort", "date_desc")
         person_filter = request.args.get("person", "").strip()
-        ai_status = request.args.get("aiStatus", "").strip()
 
         result = list(PROJECTS)
 
         if person_filter:
             result = [p for p in result if p.get("ownerRole", "").lower() == person_filter.lower()]
 
-        if ai_status:
-            result = [p for p in result if p.get("aiClassificacao", "") == ai_status]
-
         if sort_by == "date_asc":
             result.sort(key=lambda p: p.get("createdAt", ""))
-        elif sort_by == "aiScore_desc":
-            result.sort(key=lambda p: p.get("aiScore") or 0, reverse=True)
+        elif sort_by == "importance_desc":
+            result.sort(key=lambda p: p.get("similarityScore", 0), reverse=True)
+        elif sort_by == "importance_asc":
+            result.sort(key=lambda p: p.get("similarityScore", 0))
         else:
             result.sort(key=lambda p: p.get("createdAt", ""), reverse=True)
 
@@ -825,9 +630,6 @@ def projects():
     if not title or not summary:
         return jsonify({"error": "Título e resumo são obrigatórios"}), 400
 
-    user_id = body.get("userId", "").strip()
-    user_name = body.get("userName", "").strip()
-
     new_project = {
         "id": f"proj-{uuid4().hex[:6]}",
         "title": title,
@@ -835,78 +637,37 @@ def projects():
         "org": organization,
         "areas": areas,
         "ownerRole": body.get("ownerRole", "Analista"),
-        "createdBy": {"userId": user_id, "userName": user_name or "Usuário"},
+        "similarityScore": 0,
+        "similarityType": "Sem similaridades",
         "marketingAlert": False,
-        "alertReason": "",
-        "alertSeverity": "BAIXA",
-        "similarityAlerts": [],
         "comments": [],
         "createdAt": utc_now_iso(),
         "references": body.get("references") or ["Projeto semelhante identificado pelo agente", "Revisar com Marketing"],
         "votes": [],
-        "aiEvaluation": None,
-        "aiClassificacao": "Não avaliado",
-        "aiScore": None,
     }
     alert = calculate_project_alerts(new_project)
-    new_project["marketingAlert"] = alert["needsMarketing"]
-    new_project["alertReason"] = alert["reason"]
-    new_project["alertSeverity"] = alert["severity"]
-
     similarity = find_similar_projects(new_project, PROJECTS)
-    if similarity['hasSimilarProjects']:
-        alert_entry = {
-            "similarProjects": [],
-            "createdAt": utc_now_iso(),
-        }
-        for match in similarity['matches']:
-            alert_entry["similarProjects"].append({
-                "id": match['id'],
-                "title": match['title'],
-                "summary": match['summary'],
-                "org": match['org'],
-                "createdBy": match.get('createdBy', {}),
-            })
-        alert_entry["similarProjects"].append({
-            "id": new_project['id'],
-            "title": new_project['title'],
-            "summary": new_project['summary'],
-            "org": new_project['org'],
-            "createdBy": new_project['createdBy'],
-        })
-        new_project["similarityAlerts"] = [alert_entry]
+    new_project["marketingAlert"] = alert["needsMarketing"] or similarity['hasSimilarProjects']
+    new_project["alertReason"] = alert["reason"] if alert["needsMarketing"] else "Projeto semelhante encontrado; revisar com as áreas envolvidas."
+    new_project["alertSeverity"] = alert["severity"] if alert["needsMarketing"] else "MÉDIA"
+    new_project["similarityScore"] = similarity['similarityScore']
+    new_project["similarityType"] = "Projeto quase idêntico" if similarity['similarityScore'] >= 70 else "Objetivos parecidos" if similarity['similarityScore'] >= 40 else "Leves similaridades" if similarity['hasSimilarProjects'] else "Sem similaridades"
+    new_project["similarityMatches"] = similarity['matches']
+    new_project["similarityNotifications"] = similarity['notifications']
+    new_project["relatedProjects"] = [{"id": match['id'], "title": match['title'], "similarity": match['similarity']} for match in similarity['matches']]
 
-        for match in similarity['matches']:
-            existing = next((item for item in PROJECTS if item['id'] == match['id']), None)
-            if existing is None:
-                continue
-            seen = False
-            for ea in existing.setdefault("similarityAlerts", []):
-                existing_ids = {p['id'] for p in ea.get("similarProjects", [])}
-                if new_project['id'] in existing_ids:
-                    seen = True
-                    break
-            if not seen:
-                existing["similarityAlerts"].append(alert_entry)
-
-    ai_eval = evaluate_project_with_gemini(new_project)
-    if ai_eval:
-        new_project["aiEvaluation"] = ai_eval
-        new_project["aiClassificacao"] = ai_eval["classificacao"]
-        new_project["aiScore"] = ai_eval["score"]
-        if ai_eval["classificacao"] in ("BLOQUEADO", "APROVAÇÃO CONDICIONAL"):
-            new_project["marketingAlert"] = True
-            reason_extra = f"AI: {ai_eval['classificacao']} — {ai_eval.get('justificativa', '')} — {ai_eval.get('plano_acao', '')}"
-            if new_project.get("alertReason"):
-                new_project["alertReason"] = new_project["alertReason"] + " | " + reason_extra
-            else:
-                new_project["alertReason"] = reason_extra
-            if new_project.get("alertSeverity", "BAIXA") not in ("ALTA",):
-                new_project["alertSeverity"] = "ALTA" if ai_eval["classificacao"] == "BLOQUEADO" else "MÉDIA"
-    else:
-        new_project["aiEvaluation"] = None
-        new_project["aiClassificacao"] = "Não avaliado"
-        new_project["aiScore"] = None
+    for match in similarity['matches']:
+        existing = next((item for item in PROJECTS if item['id'] == match['id']), None)
+        if existing is None:
+            continue
+        existing.setdefault("relatedProjects", []).append({"id": new_project['id'], "title": new_project['title'], "similarity": match['similarity']})
+        existing['similarityScore'] = max(existing.get('similarityScore', 0), match['similarity'])
+        existing['similarityType'] = "Projeto quase idêntico" if existing['similarityScore'] >= 70 else "Objetivos parecidos" if existing['similarityScore'] >= 40 else "Leves similaridades"
+        existing['marketingAlert'] = existing.get('marketingAlert', False) or (match['similarity'] >= 50)
+        existing['alertReason'] = "Projeto semelhante encontrado; revisar com as áreas envolvidas."
+        existing['alertSeverity'] = "MÉDIA"
+        existing.setdefault('similarityMatches', []).append({'id': new_project['id'], 'title': new_project['title'], 'similarity': match['similarity'], 'org': organization})
+        existing['similarityNotifications'] = ['marketing', 'owners']
 
     PROJECTS.insert(0, new_project)
 
