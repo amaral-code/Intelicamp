@@ -392,7 +392,112 @@
       30% { transform: translateY(-5px); }
     }
 
+    .dashboard-summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .summary-card {
+      background: var(--branco);
+      border-radius: 18px;
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(18, 26, 40, 0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .summary-card .summary-icon { font-size: 22px; }
+    .summary-card .summary-value { font-size: 28px; font-weight: 800; color: var(--azul-escuro); }
+    .summary-card .summary-label { font-size: 13px; color: var(--cinza-300); font-weight: 500; }
+    .summary-card .summary-sub { font-size: 12px; color: var(--cinza-300); }
+
+    .dashboard-filters {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .filter-tab {
+      border: 1px solid var(--cinza-100);
+      background: var(--branco);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--cinza-600);
+      transition: all 0.15s ease;
+    }
+    .filter-tab:hover { border-color: var(--azul-destaque); color: var(--azul-destaque); }
+    .filter-tab.active { background: var(--azul-destaque); color: var(--branco); border-color: var(--azul-destaque); }
+
+    .dashboard-item {
+      background: var(--branco);
+      border-radius: 16px;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(18, 26, 40, 0.04);
+      border-left: 4px solid var(--cinza-300);
+      transition: transform 0.15s ease;
+    }
+    .dashboard-item:hover { transform: translateY(-1px); }
+    .dashboard-item.border-green { border-left-color: var(--success); }
+    .dashboard-item.border-yellow { border-left-color: var(--warning); }
+    .dashboard-item.border-red { border-left-color: var(--danger); }
+    .dashboard-item.border-gray { border-left-color: var(--cinza-300); }
+
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .dashboard-header .title-group { display: flex; flex-direction: column; gap: 2px; }
+    .dashboard-header .title-group strong { font-size: 16px; }
+    .dashboard-header .title-group .meta { font-size: 12px; color: var(--cinza-300); }
+    .dashboard-header .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .dashboard-status-bar {
+      height: 6px;
+      border-radius: 999px;
+      background: var(--cinza-100);
+      overflow: hidden;
+      display: flex;
+    }
+    .dashboard-status-bar .bar-fill { height: 100%; transition: width 0.3s ease; }
+    .dashboard-status-bar .bar-green { background: var(--success); }
+    .dashboard-status-bar .bar-red { background: var(--danger); }
+
+    .dashboard-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .alert-similarity-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 10px 0;
+    }
+    .alert-similarity-card {
+      background: var(--cinza-50);
+      border-radius: 12px;
+      padding: 12px;
+      border: 1px solid var(--cinza-100);
+    }
+    .alert-similarity-card strong { display: block; font-size: 14px; margin-bottom: 4px; }
+    .alert-similarity-card p { font-size: 13px; color: var(--cinza-600); line-height: 1.5; margin: 0; }
+    .alert-similarity-card .meta { font-size: 11px; color: var(--cinza-300); margin-top: 4px; }
+
     @media (max-width: 980px) {
+      .dashboard-summary { grid-template-columns: repeat(2, 1fr); }
+      .alert-similarity-grid { grid-template-columns: 1fr; }
+    }
       .login-screen { grid-template-columns: 1fr; }
       .content { grid-template-columns: 1fr; }
       .sidebar { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -539,14 +644,20 @@
 
         <section id="viewInbox" class="panel hidden">
           <h3>Inbox de alertas</h3>
-          <p>Marketing e líderes recebem sinalizações automáticas quando um projeto pode conflitar com a marca, se parecer muito semelhante a um existente ou aumentar risco de imagem.</p>
+          <p>Notificações sobre conflitos de marca e similaridade entre projetos. O time de Marketing vê alertas de projetos que não criou; criadores de projetos similares veem as notificações de similaridade.</p>
           <div id="alertsList" class="upcoming-list"></div>
         </section>
 
-        <section id="viewDashboard" class="panel hidden">
-          <h3>Dashboard de projetos</h3>
-          <p>Status de aprovação por IA e feedback de votos da equipe.</p>
-          <div id="dashboardList" class="upcoming-list"></div>
+        <section id="viewDashboard" class="hidden" style="display:flex;flex-direction:column;gap:0;">
+          <div class="dashboard-summary" id="dashboardSummary"></div>
+          <div class="dashboard-filters" id="dashboardFilters">
+            <button class="filter-tab active" data-filter="all">Todos</button>
+            <button class="filter-tab" data-filter="APROVADO">Aprovados</button>
+            <button class="filter-tab" data-filter="APROVAÇÃO CONDICIONAL">Condicional</button>
+            <button class="filter-tab" data-filter="BLOQUEADO">Bloqueados</button>
+            <button class="filter-tab" data-filter="pending">Pendentes</button>
+          </div>
+          <div id="dashboardList" class="upcoming-list" style="display:flex;flex-direction:column;gap:12px;"></div>
         </section>
 
         <section id="viewChannel" class="hidden">
@@ -624,12 +735,13 @@
                 </select>
               </div>
               <div class="field">
-                <label>Importância</label>
-                <select id="filterImportance">
-                  <option value="">Todas</option>
-                  <option value="alta">Alta similaridade (&gt;70%)</option>
-                  <option value="media">Média similaridade (35-70%)</option>
-                  <option value="baixa">Baixa similaridade (&lt;35%)</option>
+                <label>Status IA</label>
+                <select id="filterAiStatus">
+                  <option value="">Todos</option>
+                  <option value="APROVADO">Aprovado</option>
+                  <option value="APROVAÇÃO CONDICIONAL">Condicional</option>
+                  <option value="BLOQUEADO">Bloqueado</option>
+                  <option value="Não avaliado">Não avaliado</option>
                 </select>
               </div>
               <div class="field">
@@ -742,11 +854,6 @@
       document.getElementById('viewDashboard').classList.toggle('hidden', view !== 'dashboard');
       document.getElementById('viewChannel').classList.toggle('hidden', view !== 'channel');
       if (view === 'dashboard') renderDashboard();
-    }
-
-    function showProjectAccess(projectId) {
-      setView('channel');
-      openProject(projectId);
     }
 
     function updateProjectComposerAccess() {
@@ -903,74 +1010,176 @@
     }
 
     function renderAlerts() {
-      if (!state.user?.isMarketing) {
-        alertsList.innerHTML = '<div class="empty">A inbox de alertas é exclusiva para o time de Marketing.</div>';
+      const isMarketing = Boolean(state.user?.isMarketing);
+      const userId = state.user?.id;
+      const userName = state.user?.name;
+
+      const conflictAlerts = state.projects.filter(p =>
+        p.marketingAlert && isMarketing && p.createdBy?.userId !== userId
+      );
+
+      const seenSimKeys = new Set();
+      const simNotifications = [];
+      state.projects.forEach(p => {
+        (p.similarityAlerts || []).forEach(sa => {
+          const sp = sa.similarProjects || [];
+          const key = sp.map(s => s.id).sort().join('-');
+          if (seenSimKeys.has(key)) return;
+          seenSimKeys.add(key);
+          const userIsCreator = sp.some(s => s.createdBy?.userId === userId);
+          if (isMarketing || userIsCreator) {
+            simNotifications.push({ project: p, alert: sa });
+          }
+        });
+      });
+
+      if (!conflictAlerts.length && !simNotifications.length) {
+        if (!state.user) {
+          alertsList.innerHTML = '<div class="empty">Faça login para ver as notificações.</div>';
+        } else {
+          alertsList.innerHTML = '<div class="empty">Nenhuma notificação no momento.</div>';
+        }
         return;
       }
 
-      const alerts = state.projects.filter(project => project.marketingAlert);
-      if (!alerts.length) {
-        alertsList.innerHTML = '<div class="empty">Nenhum alerta crítico neste momento. O agente está monitorando.</div>';
-        return;
-      }
-      alertsList.innerHTML = alerts.map(project => {
+      let html = '';
+
+      conflictAlerts.forEach(project => {
         const severityClass = project.alertSeverity === 'ALTA' ? 'critical' : project.alertSeverity === 'MÉDIA' ? 'warning' : 'success';
-        const alertReasonHtml = (project.alertReason || 'Risco identificado pelo agente de marca.').split('\n').map(line => `<div>${line}</div>`).join('');
-        const qualHtml = renderQualificationVotes(project);
-        return `<div class="alert-card ${severityClass} clickable" role="button" tabindex="0" onclick="showProjectAccess('${project.id}')" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showProjectAccess('${project.id}'); }">
-          <strong>${project.title}</strong>
-          <div style="margin:6px 0 4px;font-size:13px;line-height:1.6;color:var(--cinza-600);">${alertReasonHtml}</div>
+        html += `<div class="alert-card ${severityClass} clickable" role="button" tabindex="0" onclick="openProject('${project.id}')" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openProject('${project.id}'); }">
+          <strong>🔔 Conflito de marca: ${project.title}</strong>
+          <div style="margin:6px 0 4px;font-size:13px;line-height:1.6;color:var(--cinza-600);">${project.alertReason}</div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;">
             <span class="chip ${project.alertSeverity === 'ALTA' ? 'red' : project.alertSeverity === 'MÉDIA' ? 'yellow' : 'green'}">${project.alertSeverity}</span>
-            <span style="font-size:12px;color:var(--cinza-300);">${project.org} • ${(project.areas || []).join(', ')}</span>
+            <span style="font-size:12px;color:var(--cinza-300);">${project.org} • ${(project.areas || []).join(', ')} • por ${project.createdBy?.userName || '—'}</span>
           </div>
-          ${qualHtml}
         </div>`;
-      }).join('');
+      });
+
+      simNotifications.forEach(({ project, alert }) => {
+        const sp = alert.similarProjects || [];
+        html += `<div class="alert-card warning clickable" role="button" tabindex="0" onclick="openProject('${project.id}')" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openProject('${project.id}'); }">
+          <strong>🔗 Projetos similares detectados</strong>
+          <div style="margin:6px 0 4px;font-size:13px;color:var(--cinza-600);">Os seguintes projetos compartilham ideias semelhantes e podem precisar de alinhamento:</div>
+          <div class="alert-similarity-grid">
+            ${sp.map(s => `<div class="alert-similarity-card" onclick="event.stopPropagation();openProject('${s.id}')" style="cursor:pointer;">
+              <strong>${s.title}</strong>
+              <p>${s.summary}</p>
+              <div class="meta">${s.org} • por ${s.createdBy?.userName || '—'}</div>
+            </div>`).join('')}
+          </div>
+          <div style="font-size:12px;color:var(--cinza-300);margin-top:6px;">${alert.createdAt ? new Date(alert.createdAt).toLocaleString('pt-BR') : ''}</div>
+        </div>`;
+      });
+
+      alertsList.innerHTML = html;
     }
 
     function renderDashboard() {
       if (!state.projects.length) {
+        document.getElementById('dashboardSummary').innerHTML = '';
         document.getElementById('dashboardList').innerHTML = '<div class="empty">Nenhum projeto submetido ainda.</div>';
         return;
       }
 
-      document.getElementById('dashboardList').innerHTML = state.projects.map(project => {
+      const total = state.projects.length;
+      const alerts = state.projects.filter(p => p.marketingAlert).length;
+      const totalVotes = state.projects.reduce((sum, p) => sum + (p.votes || []).length, 0);
+      const pending = state.projects.filter(p => !p.votes || p.votes.length === 0).length;
+
+      document.getElementById('dashboardSummary').innerHTML = `
+        <div class="summary-card">
+          <div class="summary-value">${total}</div>
+          <div class="summary-label">Projetos</div>
+          <div class="summary-sub">Total no canal</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-value">${alerts}</div>
+          <div class="summary-label">Alertas</div>
+          <div class="summary-sub">${alerts > 0 ? 'Requerem atenção' : 'Nenhum alerta ativo'}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-value">${totalVotes}</div>
+          <div class="summary-label">Votos</div>
+          <div class="summary-sub">Feedbacks registrados</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-value">${pending}</div>
+          <div class="summary-label">Pendentes</div>
+          <div class="summary-sub">${pending > 0 ? 'Aguardando revisão' : 'Todos revisados'}</div>
+        </div>
+      `;
+
+      const activeFilter = document.querySelector('#dashboardFilters .filter-tab.active')?.dataset?.filter || 'all';
+      let filtered = [...state.projects];
+      if (activeFilter !== 'all') {
+        if (activeFilter === 'pending') {
+          filtered = filtered.filter(p => !p.votes || p.votes.length === 0);
+        } else {
+          filtered = filtered.filter(p => p.aiClassificacao === activeFilter);
+        }
+      }
+
+      document.getElementById('dashboardList').innerHTML = filtered.map(project => {
         const votes = project.votes || [];
         const qual = votes.filter(v => v.vote === 'qualificado').length;
         const nao = votes.filter(v => v.vote === 'nao_qualificado').length;
-        const total = votes.length;
-        const qualPct = total > 0 ? (qual / total * 100) : 0;
-        const naoPct = total > 0 ? (nao / total * 100) : 0;
+        const total_votes = votes.length;
+        const qualPct = total_votes > 0 ? (qual / total_votes * 100) : 0;
+        const naoPct = total_votes > 0 ? (nao / total_votes * 100) : 0;
 
-        const aiClass = project.aiClassificacao;
+        const aiClass = project.aiClassificacao || 'Não avaliado';
         const isApproved = aiClass === 'APROVADO';
         const isConditional = aiClass === 'APROVAÇÃO CONDICIONAL';
-        const barColor = isApproved ? 'var(--success)' : isConditional ? 'var(--warning)' : 'var(--danger)';
+        const isBlocked = aiClass === 'BLOQUEADO';
+        const borderClass = isApproved ? 'border-green' : isConditional ? 'border-yellow' : isBlocked ? 'border-red' : 'border-gray';
+        const statusChipClass = isApproved ? 'green' : isConditional ? 'yellow' : isBlocked ? 'red' : '';
+        const dateStr = project.createdAt ? new Date(project.createdAt).toLocaleDateString('pt-BR') : '';
 
-        return `<div class="dashboard-item">
-          <div class="dashboard-title" style="color:${barColor};border-left:4px solid ${barColor};padding-left:10px;">
-            <strong>${project.title}</strong>
-            <span class="chip" style="background:${barColor};color:#fff;font-size:11px;margin-left:8px;">${aiClass || 'Não avaliado'}${project.aiScore != null ? ' (' + project.aiScore + '/100)' : ''}</span>
-          </div>
-          <div class="vote-bar-container">
-            <div class="vote-bar">
-              <div class="vote-bar-fill vote-bar-ok" style="width:${qualPct}%"></div>
-              <div class="vote-bar-fill vote-bar-nao" style="width:${naoPct}%"></div>
+        return `<div class="dashboard-item ${borderClass}">
+          <div class="dashboard-header">
+            <div class="title-group">
+              <strong>${project.title}</strong>
+              <span class="meta">${project.org} • ${project.ownerRole} • ${dateStr}</span>
             </div>
-            <span class="vote-bar-label">${total > 0 ? qual + ' a favor · ' + nao + ' contra' : 'Sem votos'}</span>
+            <div class="chips">
+              ${project.aiScore != null ? `<span class="chip ${statusChipClass}" style="font-size:11px;">${aiClass} (${project.aiScore}/100)</span>` : `<span class="chip" style="background:var(--cinza-100);color:var(--cinza-600);font-size:11px;">${aiClass}</span>`}
+              ${project.marketingAlert ? '<span class="chip red" style="font-size:11px;">ALERTA</span>' : ''}
+              ${project.similarityAlerts?.length ? '<span class="chip yellow" style="font-size:11px;">SIMILAR</span>' : ''}
+            </div>
+          </div>
+          <p style="font-size:14px;color:var(--cinza-600);margin:0;line-height:1.6;">${project.summary}</p>
+          <div>
+            <div class="vote-bar" style="height:6px;border-radius:999px;background:var(--cinza-100);display:flex;overflow:hidden;">
+              <div style="height:100%;background:var(--success);transition:width 0.3s;width:${qualPct}%"></div>
+              <div style="height:100%;background:var(--danger);transition:width 0.3s;width:${naoPct}%"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:4px;">
+              <span style="font-size:12px;color:var(--success);font-weight:600;">${qual} a favor</span>
+              <span style="font-size:12px;color:var(--cinza-300);">${total_votes} voto(s)</span>
+              <span style="font-size:12px;color:var(--danger);font-weight:600;">${nao} contra</span>
+            </div>
+          </div>
+          <div class="dashboard-actions">
+            <button class="btn btn-small btn-secondary" onclick="openProject('${project.id}')">Ver detalhes</button>
+            <button class="btn btn-small ${project._userVote === 'qualificado' ? 'btn-primary' : 'btn-secondary'}" onclick="voteOnProject('${project.id}','qualificado')">✓ A favor</button>
+            <button class="btn btn-small ${project._userVote === 'nao_qualificado' ? 'btn-primary' : 'btn-secondary'}" onclick="voteOnProject('${project.id}','nao_qualificado')">✗ Contra</button>
           </div>
         </div>`;
       }).join('');
     }
 
+    const filterAiStatus = document.getElementById('filterAiStatus');
+
     function renderProjects() {
       const search = searchInput.value.toLowerCase();
       const org = filterOrg.value;
+      const aiStatus = filterAiStatus.value;
       const filtered = state.projects.filter(project => {
         const matchesSearch = `${project.title} ${project.summary} ${project.org} ${project.areas.join(' ')}`.toLowerCase().includes(search);
         const matchesOrg = !org || project.org === org;
-        return matchesSearch && matchesOrg;
+        const matchesAi = !aiStatus || (project.aiClassificacao || 'Não avaliado') === aiStatus;
+        return matchesSearch && matchesOrg && matchesAi;
       });
 
       if (!filtered.length) {
@@ -979,16 +1188,12 @@
       }
 
       projectList.innerHTML = filtered.map(project => {
-        const chipClass = project.similarityScore > 70 ? 'red' : project.similarityScore > 35 ? 'yellow' : 'green';
-        const similarityBadge = project.similarityScore && project.similarityMatches && project.similarityMatches.length ? `<span class="chip ${chipClass}">${project.similarityType}</span>` : '';
-        const relatedInfo = project.relatedProjects && project.relatedProjects.length ? `<div class="project-meta">Relacionados: ${project.relatedProjects.map(item => item.title).join(', ')}</div>` : '';
-        const similarCount = project.similarityMatches ? project.similarityMatches.length : 0;
-        const similarityHint = similarCount ? `<div class="project-meta">${similarCount} projeto(s) com ideias semelhantes</div>` : '';
         const votes = project.votes || [];
         const qualCount = votes.filter(v => v.vote === 'qualificado').length;
         const naoCount = votes.filter(v => v.vote === 'nao_qualificado').length;
         let qualStatus = '';
         if (votes.length > 0) qualStatus = `<span class="chip yellow" style="font-size:11px;">Feedback de revisão</span>`;
+        else qualStatus = `<span class="chip" style="background:var(--cinza-100);color:var(--cinza-600);font-size:11px;">Sem votos</span>`;
         const aiClass = project.aiClassificacao;
         const aiChip = aiClass && aiClass !== 'Não avaliado'
           ? `<span class="chip ${aiClass === 'APROVADO' ? 'green' : aiClass === 'APROVAÇÃO CONDICIONAL' ? 'yellow' : 'red'}">${aiClass}</span>`
@@ -997,13 +1202,11 @@
           <div class="project-actions">
             <strong>${project.title}</strong>
             ${aiChip}
-            ${similarityBadge}
+            ${project.similarityAlerts?.length ? '<span class="chip yellow" style="font-size:11px;">SIMILAR</span>' : ''}
           </div>
-          <div class="project-meta">${project.org} • ${project.areas.join(', ')} • ${project.ownerRole}</div>
+          <div class="project-meta">${project.org} • ${project.areas.join(', ')} • ${project.ownerRole} • por ${project.createdBy?.userName || '—'}</div>
           <p>${project.summary}</p>
-          <div class="tags">${project.references.slice(0, 2).map(r => `<span class="tag">${r}</span>`).join('')}</div>
-          ${relatedInfo}
-          ${similarityHint}
+          <div class="tags">${(project.references || []).slice(0, 2).map(r => `<span class="tag">${r}</span>`).join('')}</div>
           <div class="project-actions" style="margin-top:8px;">
             <span style="display:flex;gap:6px;align-items:center;">
               <span class="chip ${project.marketingAlert ? 'red' : 'green'}">${project.marketingAlert ? 'Marketing notificado' : 'Pronto para revisão'}</span>
@@ -1020,7 +1223,6 @@
       if (!project) return;
       state.selectedProjectId = projectId;
       document.getElementById('modalTitle').textContent = project.title;
-      const similarProjects = (project.similarityMatches || []).map(match => `<button class="btn btn-small btn-secondary" type="button" onclick="showProjectAccess('${match.id}')">${match.title}</button>`).join('');
       const aiEval = project.aiEvaluation;
       const aiHtml = aiEval
         ? `<div class="alert-card ${aiEval.classificacao === 'APROVADO' ? 'success' : aiEval.classificacao === 'APROVAÇÃO CONDICIONAL' ? 'warning' : 'critical'}" style="margin-top:12px;">
@@ -1032,14 +1234,40 @@
           ? `<div class="alert-card success" style="margin-top:12px;"><strong>Avaliação da IA</strong><p style="margin:6px 0 0;font-size:13px;">Avaliação não disponível no momento.</p></div>`
           : '';
 
+      let simHtml = '';
+      if (project.similarityAlerts?.length > 0) {
+        const allSim = [];
+        const seenIds = new Set();
+        project.similarityAlerts.forEach(sa => {
+          (sa.similarProjects || []).forEach(sp => {
+            if (sp.id !== project.id && !seenIds.has(sp.id)) {
+              seenIds.add(sp.id);
+              allSim.push(sp);
+            }
+          });
+        });
+        if (allSim.length > 0) {
+          simHtml = `<div style="margin-top:12px;">
+            <strong style="color:var(--warning);">Projetos similares</strong>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+              ${allSim.map(s => `<div class="alert-similarity-card" style="cursor:pointer;" onclick="event.stopPropagation();openProject('${s.id}')">
+                <strong>${s.title}</strong>
+                <p>${s.summary}</p>
+                <div class="meta">${s.org} • por ${s.createdBy?.userName || '—'}</div>
+              </div>`).join('')}
+            </div>
+          </div>`;
+        }
+      }
+
       modalContent.innerHTML = `
         <div class="alert-card ${project.marketingAlert ? 'critical' : 'success'}">
           <strong>${project.org}</strong>
           <div>${project.summary}</div>
         </div>
-        <div class="project-meta" style="margin-top:10px;">Áreas: ${project.areas.join(', ')} • Similaridade: ${project.similarityScore}% • ${project.similarityType}</div>
-        <div class="tags" style="margin-top:10px;">${project.references.map(ref => `<span class="tag">${ref}</span>`).join('')}</div>
-        ${project.similarityMatches && project.similarityMatches.length ? `<div style="margin-top:12px;"><strong>Projetos similares</strong><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">${similarProjects}</div></div>` : ''}
+        <div class="project-meta" style="margin-top:10px;">Áreas: ${project.areas.join(', ')} • ${project.ownerRole} • Criado por ${project.createdBy?.userName || '—'}</div>
+        <div class="tags" style="margin-top:10px;">${(project.references || []).map(ref => `<span class="tag">${ref}</span>`).join('')}</div>
+        ${simHtml}
         ${aiHtml}
         <hr style="margin:14px 0;border:none;border-top:1px solid var(--cinza-100);" />
         <div id="modalQualification">${renderQualificationVotes(project)}</div>
@@ -1070,6 +1298,8 @@
         ownerRole: document.getElementById('projectOwnerRole').value.trim(),
         references: document.getElementById('projectReferences').value.split(';').map(item => item.trim()).filter(Boolean),
         userRole: state.user?.roleLevel || 'Analista',
+        userId: state.user?.id || '',
+        userName: state.user?.name || '',
       };
       const response = await fetch('/api/projects', {
         method: 'POST',
@@ -1105,6 +1335,14 @@
 
     document.querySelectorAll('.nav-item[data-view]').forEach(button => {
       button.addEventListener('click', () => setView(button.dataset.view));
+    });
+
+    document.querySelectorAll('.filter-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderDashboard();
+      });
     });
 
     let chatHistory = [];
@@ -1228,8 +1466,8 @@
       `;
     });
     document.getElementById('clearFormBtn').addEventListener('click', () => projectForm.reset());
-    [searchInput, filterOrg].forEach(input => input.addEventListener('input', renderProjects));
-    [searchInput, filterOrg].forEach(input => input.addEventListener('change', renderProjects));
+    [searchInput, filterOrg, filterAiStatus].forEach(input => input.addEventListener('input', renderProjects));
+    [searchInput, filterOrg, filterAiStatus].forEach(input => input.addEventListener('change', renderProjects));
 
     updateProjectComposerAccess();
     toggleAssistantVisibility();

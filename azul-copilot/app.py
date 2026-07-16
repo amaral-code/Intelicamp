@@ -313,11 +313,11 @@ PROJECTS = [
         "org": "Azul Viagens",
         "areas": ["Marketing", "Produtos"],
         "ownerRole": "Gerente",
-        "similarityScore": 24,
-        "similarityType": "Leves similaridades",
+        "createdBy": {"userId": "u1", "userName": "Carla Nogueira"},
         "marketingAlert": False,
         "alertReason": "Sem alertas críticos. O projeto respeita os pilares de conectividade, atendimento humanizado e brasilidade. Monitoramento de rotina recomendado.",
         "alertSeverity": "BAIXA",
+        "similarityAlerts": [],
         "comments": [
             {"id": "c1", "author": "Bruna", "role": "Analista", "text": "Gostei do foco nas rotas regionais. Podemos incorporar uma nota de brasilidade no posicionamento."}
         ],
@@ -326,7 +326,10 @@ PROJECTS = [
         "votes": [
             {"userId": "u1", "userName": "Carla Nogueira", "role": "Gerente", "vote": "qualificado", "timestamp": "2026-07-11T10:00:00Z"},
             {"userId": "u3", "userName": "Ana Beatriz", "role": "Diretor", "vote": "qualificado", "timestamp": "2026-07-11T14:30:00Z"},
-        ]
+        ],
+        "aiEvaluation": None,
+        "aiClassificacao": "Não avaliado",
+        "aiScore": None,
     },
     {
         "id": "proj-002",
@@ -335,11 +338,11 @@ PROJECTS = [
         "org": "Azul Conecta",
         "areas": ["TI", "Customer Experience"],
         "ownerRole": "Analista",
-        "similarityScore": 68,
-        "similarityType": "Objetivos parecidos",
+        "createdBy": {"userId": "u5", "userName": "Juliana Souza"},
         "marketingAlert": True,
         "alertReason": "ALERTA DE IMAGEM: O projeto menciona chatbot, sac. Impacto potencial: percepção negativa do cliente sobre o atendimento humanizado da Azul. Ação necessária: garantir que o atendimento humano seja preservado como alternativa.",
         "alertSeverity": "MÉDIA",
+        "similarityAlerts": [],
         "comments": [
             {"id": "c2", "author": "Mateus", "role": "Gerente", "text": "A proposta precisa deixar claro que o canal humano não será removido."}
         ],
@@ -353,7 +356,10 @@ PROJECTS = [
             {"userId": "u3", "userName": "Ana Beatriz", "role": "Diretor", "vote": "nao_qualificado", "timestamp": "2026-07-14T10:00:00Z"},
             {"userId": "u8", "userName": "Luciana Rocha", "role": "VP / Superintendente", "vote": "nao_qualificado", "timestamp": "2026-07-14T16:00:00Z"},
             {"userId": "u5", "userName": "Juliana Souza", "role": "Especialista", "vote": "qualificado", "timestamp": "2026-07-15T08:00:00Z"},
-        ]
+        ],
+        "aiEvaluation": None,
+        "aiClassificacao": "Não avaliado",
+        "aiScore": None,
     },
 ]
 
@@ -448,23 +454,14 @@ def find_similar_projects(project: dict, all_projects: list[dict]) -> dict:
             matches.append({
                 'id': candidate['id'],
                 'title': candidate['title'],
+                'summary': candidate.get('summary', ''),
                 'similarity': similarity,
                 'org': candidate['org'],
+                'createdBy': candidate.get('createdBy', {}),
             })
 
-    if not matches:
-        return {
-            'hasSimilarProjects': False,
-            'similarityScore': 0,
-            'notifications': ['marketing'],
-            'matches': [],
-        }
-
-    best = max(matches, key=lambda item: item['similarity'])
     return {
-        'hasSimilarProjects': True,
-        'similarityScore': best['similarity'],
-        'notifications': ['marketing'],
+        'hasSimilarProjects': len(matches) > 0,
         'matches': matches,
     }
 
@@ -776,14 +773,14 @@ def login():
 
     role_lower = role_level.lower().replace("vp / superintendente", "vp_superintendente")
     is_marketing_area = area.lower() == "marketing"
-    high_roles = {"coordenador", "supervisor", "gerente", "diretor", "executivo", "vp_superintendente"}
+    user_id = f"user-{uuid4().hex[:6]}"
     user = {
-        "id": f"user-{uuid4().hex[:6]}",
+        "id": user_id,
         "name": name,
         "roleLevel": role_level,
         "organization": organization,
         "area": area,
-        "isMarketing": is_marketing_area or role_lower in high_roles,
+        "isMarketing": is_marketing_area,
         "canCreate": role_lower in CREATE_ALLOWED_ROLES,
     }
     return jsonify({"user": user, "projects": PROJECTS, "users": USERS}), 200
@@ -794,18 +791,20 @@ def projects():
     if request.method == "GET":
         sort_by = request.args.get("sort", "date_desc")
         person_filter = request.args.get("person", "").strip()
+        ai_status = request.args.get("aiStatus", "").strip()
 
         result = list(PROJECTS)
 
         if person_filter:
             result = [p for p in result if p.get("ownerRole", "").lower() == person_filter.lower()]
 
+        if ai_status:
+            result = [p for p in result if p.get("aiClassificacao", "") == ai_status]
+
         if sort_by == "date_asc":
             result.sort(key=lambda p: p.get("createdAt", ""))
-        elif sort_by == "importance_desc":
-            result.sort(key=lambda p: p.get("similarityScore", 0), reverse=True)
-        elif sort_by == "importance_asc":
-            result.sort(key=lambda p: p.get("similarityScore", 0))
+        elif sort_by == "aiScore_desc":
+            result.sort(key=lambda p: p.get("aiScore") or 0, reverse=True)
         else:
             result.sort(key=lambda p: p.get("createdAt", ""), reverse=True)
 
@@ -826,6 +825,9 @@ def projects():
     if not title or not summary:
         return jsonify({"error": "Título e resumo são obrigatórios"}), 400
 
+    user_id = body.get("userId", "").strip()
+    user_name = body.get("userName", "").strip()
+
     new_project = {
         "id": f"proj-{uuid4().hex[:6]}",
         "title": title,
@@ -833,37 +835,59 @@ def projects():
         "org": organization,
         "areas": areas,
         "ownerRole": body.get("ownerRole", "Analista"),
-        "similarityScore": 0,
-        "similarityType": "Sem similaridades",
+        "createdBy": {"userId": user_id, "userName": user_name or "Usuário"},
         "marketingAlert": False,
+        "alertReason": "",
+        "alertSeverity": "BAIXA",
+        "similarityAlerts": [],
         "comments": [],
         "createdAt": utc_now_iso(),
         "references": body.get("references") or ["Projeto semelhante identificado pelo agente", "Revisar com Marketing"],
         "votes": [],
+        "aiEvaluation": None,
+        "aiClassificacao": "Não avaliado",
+        "aiScore": None,
     }
     alert = calculate_project_alerts(new_project)
-    similarity = find_similar_projects(new_project, PROJECTS)
-    new_project["marketingAlert"] = alert["needsMarketing"] or similarity['hasSimilarProjects']
-    new_project["alertReason"] = alert["reason"] if alert["needsMarketing"] else "Projeto semelhante encontrado; revisar com as áreas envolvidas."
-    new_project["alertSeverity"] = alert["severity"] if alert["needsMarketing"] else "MÉDIA"
-    new_project["similarityScore"] = similarity['similarityScore']
-    new_project["similarityType"] = "Projeto quase idêntico" if similarity['similarityScore'] >= 70 else "Objetivos parecidos" if similarity['similarityScore'] >= 40 else "Leves similaridades" if similarity['hasSimilarProjects'] else "Sem similaridades"
-    new_project["similarityMatches"] = similarity['matches']
-    new_project["similarityNotifications"] = similarity['notifications']
-    new_project["relatedProjects"] = [{"id": match['id'], "title": match['title'], "similarity": match['similarity']} for match in similarity['matches']]
+    new_project["marketingAlert"] = alert["needsMarketing"]
+    new_project["alertReason"] = alert["reason"]
+    new_project["alertSeverity"] = alert["severity"]
 
-    for match in similarity['matches']:
-        existing = next((item for item in PROJECTS if item['id'] == match['id']), None)
-        if existing is None:
-            continue
-        existing.setdefault("relatedProjects", []).append({"id": new_project['id'], "title": new_project['title'], "similarity": match['similarity']})
-        existing['similarityScore'] = max(existing.get('similarityScore', 0), match['similarity'])
-        existing['similarityType'] = "Projeto quase idêntico" if existing['similarityScore'] >= 70 else "Objetivos parecidos" if existing['similarityScore'] >= 40 else "Leves similaridades"
-        existing['marketingAlert'] = existing.get('marketingAlert', False) or (match['similarity'] >= 50)
-        existing['alertReason'] = "Projeto semelhante encontrado; revisar com as áreas envolvidas."
-        existing['alertSeverity'] = "MÉDIA"
-        existing.setdefault('similarityMatches', []).append({'id': new_project['id'], 'title': new_project['title'], 'similarity': match['similarity'], 'org': organization})
-        existing['similarityNotifications'] = ['marketing']
+    similarity = find_similar_projects(new_project, PROJECTS)
+    if similarity['hasSimilarProjects']:
+        alert_entry = {
+            "similarProjects": [],
+            "createdAt": utc_now_iso(),
+        }
+        for match in similarity['matches']:
+            alert_entry["similarProjects"].append({
+                "id": match['id'],
+                "title": match['title'],
+                "summary": match['summary'],
+                "org": match['org'],
+                "createdBy": match.get('createdBy', {}),
+            })
+        alert_entry["similarProjects"].append({
+            "id": new_project['id'],
+            "title": new_project['title'],
+            "summary": new_project['summary'],
+            "org": new_project['org'],
+            "createdBy": new_project['createdBy'],
+        })
+        new_project["similarityAlerts"] = [alert_entry]
+
+        for match in similarity['matches']:
+            existing = next((item for item in PROJECTS if item['id'] == match['id']), None)
+            if existing is None:
+                continue
+            seen = False
+            for ea in existing.setdefault("similarityAlerts", []):
+                existing_ids = {p['id'] for p in ea.get("similarProjects", [])}
+                if new_project['id'] in existing_ids:
+                    seen = True
+                    break
+            if not seen:
+                existing["similarityAlerts"].append(alert_entry)
 
     ai_eval = evaluate_project_with_gemini(new_project)
     if ai_eval:

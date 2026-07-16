@@ -96,8 +96,10 @@ class AppRoutesTestCase(unittest.TestCase):
         payload = second.get_json()
         self.assertTrue(payload['marketingAlert']['needsMarketing'])
         self.assertTrue(payload['similarity']['hasSimilarProjects'])
-        self.assertIn('marketing', payload['similarity']['notifications'])
-        self.assertTrue(payload['project']['relatedProjects'])
+        self.assertTrue(len(payload['project']['similarityAlerts']) > 0)
+        sim_projects = payload['project']['similarityAlerts'][0]['similarProjects']
+        self.assertGreaterEqual(len(sim_projects), 2)
+        self.assertIn('createdBy', sim_projects[0])
 
     def test_comments_and_alerts_endpoints_are_available(self):
         response = self.client.get('/api/marketing-alerts')
@@ -113,7 +115,7 @@ class AppRoutesTestCase(unittest.TestCase):
         self.assertEqual(comment_response.status_code, 200)
         self.assertEqual(comment_response.get_json()['project']['id'], project_id)
 
-    def test_similarity_notifications_are_marketing_only(self):
+    def test_similarity_alerts_are_created(self):
         self.client.post('/api/projects', json={
             'title': 'Conexão Regional Premium',
             'summary': 'Projeto para fortalecer a conexão entre rotas regionais e o ecossistema Azul Viagens.',
@@ -133,8 +135,10 @@ class AppRoutesTestCase(unittest.TestCase):
         })
 
         payload = response.get_json()
-        self.assertEqual(payload['similarity']['notifications'], ['marketing'])
-        self.assertEqual(payload['project']['similarityNotifications'], ['marketing'])
+        self.assertTrue(payload['similarity']['hasSimilarProjects'])
+        self.assertTrue(len(payload['project']['similarityAlerts']) > 0)
+        sim_ids = [p['id'] for p in payload['project']['similarityAlerts'][0]['similarProjects']]
+        self.assertIn(payload['project']['id'], sim_ids)
 
     def test_votes_are_review_feedback_not_approval(self):
         project_id = self.client.get('/api/projects').get_json()['projects'][0]['id']
