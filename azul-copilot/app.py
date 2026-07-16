@@ -894,6 +894,15 @@ def projects():
         new_project["aiEvaluation"] = ai_eval
         new_project["aiClassificacao"] = ai_eval["classificacao"]
         new_project["aiScore"] = ai_eval["score"]
+        if ai_eval["classificacao"] in ("BLOQUEADO", "APROVAÇÃO CONDICIONAL"):
+            new_project["marketingAlert"] = True
+            reason_extra = f"AI: {ai_eval['classificacao']} — {ai_eval.get('justificativa', '')} — {ai_eval.get('plano_acao', '')}"
+            if new_project.get("alertReason"):
+                new_project["alertReason"] = new_project["alertReason"] + " | " + reason_extra
+            else:
+                new_project["alertReason"] = reason_extra
+            if new_project.get("alertSeverity", "BAIXA") not in ("ALTA",):
+                new_project["alertSeverity"] = "ALTA" if ai_eval["classificacao"] == "BLOQUEADO" else "MÉDIA"
     else:
         new_project["aiEvaluation"] = None
         new_project["aiClassificacao"] = "Não avaliado"
