@@ -1,15 +1,60 @@
 import unittest
-from app import app
+import unittest.mock
+from app import app, real_module
+
+
+FAKE_AI_EVAL = {
+    "classificacao": "APROVADO",
+    "score": 85,
+    "justificativa": "Mock evaluation for tests.",
+    "plano_acao": "Mock action plan."
+}
 
 
 class AppRoutesTestCase(unittest.TestCase):
     def setUp(self):
         self.client = app.test_client()
+        self.eval_patcher = unittest.mock.patch.object(
+            real_module, 'evaluate_project_with_gemini',
+            return_value=dict(FAKE_AI_EVAL)
+        )
+        self.eval_patcher.start()
+
+    def tearDown(self):
+        self.eval_patcher.stop()
 
     def test_health_endpoint(self):
         response = self.client.get('/api/health')
         self.assertEqual(response.status_code, 200)
         self.assertIn('ok', response.get_json()['status'])
+
+    @unittest.mock.patch('urllib.request.urlopen')
+    def test_chat_endpoint(self, mock_urlopen):
+        import io
+        mock_response = io.BytesIO(
+            b'{"candidates": [{"content": {"parts": [{"text": "<response>Mocked chatbot response</response>"}]}}]}'
+        )
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        # Caso em que o GEMINI_API_KEY está definido
+        with unittest.mock.patch.object(real_module, 'GEMINI_API_KEY', 'fake_key'):
+            response = self.client.post('/api/chat', json={
+                'message': 'Olá assistente',
+                'history': [{'role': 'user', 'content': 'Oi'}, {'role': 'model', 'content': 'Olá'}]
+            })
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.get_json()['response'], 'Mocked chatbot response')
+
+    def test_chat_endpoint_empty_message(self):
+        response = self.client.post('/api/chat', json={'message': ''})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('não pode estar vazia', response.get_json()['error'])
+
+    def test_chat_endpoint_no_api_key(self):
+        with unittest.mock.patch.object(real_module, 'GEMINI_API_KEY', None):
+            response = self.client.post('/api/chat', json={'message': 'Olá'})
+            self.assertEqual(response.status_code, 500)
+            self.assertIn('não encontrada', response.get_json()['error'])
 
     def test_homepage_contains_new_channel_copy(self):
         response = self.client.get('/')
@@ -68,6 +113,43 @@ class AppRoutesTestCase(unittest.TestCase):
         self.assertEqual(comment_response.status_code, 200)
         self.assertEqual(comment_response.get_json()['project']['id'], project_id)
 
+    def test_similarity_notifications_are_marketing_only(self):
+        self.client.post('/api/projects', json={
+            'title': 'Conexão Regional Premium',
+            'summary': 'Projeto para fortalecer a conexão entre rotas regionais e o ecossistema Azul Viagens.',
+            'organization': 'Azul Viagens',
+            'areas': ['Marketing', 'Produtos'],
+            'ownerRole': 'Gerente',
+            'references': ['Campanha de conexão nacional']
+        })
+
+        response = self.client.post('/api/projects', json={
+            'title': 'Programa de corte de rotas',
+            'summary': 'Vamos remover rotas locais e reduzir a conectividade para economizar custos.',
+            'organization': 'Azul Conecta',
+            'areas': ['TI', 'Operações'],
+            'ownerRole': 'Analista',
+            'references': ['Campanha de conexão nacional']
+        })
+
+        payload = response.get_json()
+        self.assertEqual(payload['similarity']['notifications'], ['marketing'])
+        self.assertEqual(payload['project']['similarityNotifications'], ['marketing'])
+
+    def test_votes_are_review_feedback_not_approval(self):
+        project_id = self.client.get('/api/projects').get_json()['projects'][0]['id']
+        for i in range(5):
+            self.client.post(f'/api/projects/{project_id}/vote', json={
+                'vote': 'qualificado',
+                'userId': f'review-{i}',
+                'userName': f'User {i}',
+                'role': 'Analista',
+            })
+
+        response = self.client.get(f'/api/projects/{project_id}/qualification')
+        data = response.get_json()['qualification']
+        self.assertEqual(data['status'], 'revisao')
+        self.assertIn('feedback', data['status_message'].lower())
 
     def test_vote_on_project(self):
         project_id = self.client.get('/api/projects').get_json()['projects'][0]['id']
@@ -89,7 +171,6 @@ class AppRoutesTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_vote_requires_five_to_qualify(self):
-        projects = self.client.get('/api/projects').get_json()['projects']
         self.client.post('/api/projects', json={
             'title': 'Projeto de teste',
             'summary': 'Resumo de teste para votação',
@@ -107,8 +188,9 @@ class AppRoutesTestCase(unittest.TestCase):
             })
         response = self.client.get(f'/api/projects/{project_id}/qualification')
         data = response.get_json()['qualification']
-        self.assertEqual(data['status'], 'qualificado')
+        self.assertEqual(data['status'], 'revisao')
         self.assertGreaterEqual(data['qualificado'], 5)
+        self.assertIn('feedback', data['status_message'].lower())
 
     def test_director_vote_marker(self):
         project_id = self.client.get('/api/projects').get_json()['projects'][0]['id']

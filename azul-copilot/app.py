@@ -1,8 +1,12 @@
 import os
 import logging
 import socket
+import sys
 from datetime import datetime, timezone
 from uuid import uuid4
+import urllib.request
+import json
+import re
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -14,6 +18,29 @@ CORS(app)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Carrega as variáveis do arquivo .env manualmente
+def load_dotenv():
+    # Procura pelo .env no diretório pai ou no atual
+    paths = [
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"),
+        ".env"
+    ]
+    for path in paths:
+        if os.path.exists(path):
+            logger.info("Carregando variáveis de ambiente de %s", path)
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        os.environ[k.strip()] = v.strip().strip('"').strip("'")
+            break
+
+load_dotenv()
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
 
 KNOWLEDGE_BASE = """
 ## BASE DE CONHECIMENTO — CASOS E PRECEDENTES DA AZUL
@@ -33,16 +60,6 @@ KNOWLEDGE_BASE = """
 3. **Brasilidade:** Iniciativas que desconsiderem o contexto regional brasileiro ou prejudiquem a presença da Azul em qualquer região do país devem ser questionadas.
 """
 
-SYSTEM_PROMPT = f"""
-Você é o Agente de Governança de Marca da Azul Linhas Aéreas (Azul Brand Co-Pilot).
-Sua função é analisar iniciativas de negócio propostas pelas Unidades de Negócio (BUs)
-e avaliar seu impacto na marca, riscos reputacionais e alinhamento estratégico.
-
-{KNOWLEDGE_BASE}
-
-Retorne um JSON válido com os campos: alinhamento_identidade, fit_publico, maturidade_contexto, precedentes_historicos, risco_reputacional e recomendacao.
-"""
-
 CREATE_ALLOWED_ROLES = {"coordenador", "gerente", "diretor", "executivo", "vp_superintendente"}
 
 
@@ -50,7 +67,7 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def analyze_with_llm(bu_name: str, project_idea: str) -> dict:
+def analyze_by_keywords(bu_name: str, project_idea: str) -> dict:
     logger.info("Analisando iniciativa | BU: %s | Ideia: %.80s...", bu_name, project_idea)
 
     idea_lower = project_idea.lower()
@@ -130,6 +147,10 @@ def analyze_with_llm(bu_name: str, project_idea: str) -> dict:
         "risco_reputacional": risk,
         "recomendacao": recommendation,
     }
+
+
+def analyze_with_llm(bu_name: str, project_idea: str) -> dict:
+    return analyze_by_keywords(bu_name, project_idea)
 
 
 def mentor_project(bu_name: str, project_idea: str) -> dict:
@@ -443,7 +464,7 @@ def find_similar_projects(project: dict, all_projects: list[dict]) -> dict:
     return {
         'hasSimilarProjects': True,
         'similarityScore': best['similarity'],
-        'notifications': ['marketing', 'owners'],
+        'notifications': ['marketing'],
         'matches': matches,
     }
 
@@ -457,17 +478,19 @@ def compute_project_qualification(project: dict) -> dict:
     director_qualificado = [v for v in votes if v["vote"] == "qualificado" and v.get("role") in ("Diretor", "Executivo", "VP / Superintendente")]
     director_nao_qualificado = [v for v in votes if v["vote"] == "nao_qualificado" and v.get("role") in ("Diretor", "Executivo", "VP / Superintendente")]
 
-    status = "pending"
-    if qualificado_count >= 5:
-        status = "qualificado"
-    elif nao_qualificado_count >= 5:
-        status = "nao_qualificado"
+    if total_votes == 0:
+        status = "pending"
+        status_message = "Aguardando feedback de revisão."
+    else:
+        status = "revisao"
+        status_message = "Os votos funcionam como feedback de revisão e não definem aprovação automática."
 
     return {
         "qualificado": qualificado_count,
         "nao_qualificado": nao_qualificado_count,
         "total": total_votes,
         "status": status,
+        "status_message": status_message,
         "director_qualificado": [{"userName": v["userName"], "role": v["role"]} for v in director_qualificado],
         "director_nao_qualificado": [{"userName": v["userName"], "role": v["role"]} for v in director_nao_qualificado],
     }
@@ -516,9 +539,173 @@ def get_qualification(project_id: str):
     return jsonify({"qualification": qualification, "project": project}), 200
 
 
+def _call_gemini(system_instruction: str, user_text: str) -> str | None:
+    if not GEMINI_API_KEY:
+        logger.warning("GEMINI_API_KEY não configurada")
+        return None
+
+    model_name = "models/gemma-4-26b-a4b-it"
+    url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent?key={GEMINI_API_KEY}"
+
+    payload = {
+        "systemInstruction": {"parts": [{"text": system_instruction}]},
+        "contents": [{"role": "user", "parts": [{"text": user_text}]}]
+    }
+
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=60) as response:
+            res_data = json.loads(response.read().decode())
+            candidates = res_data.get("candidates", [])
+            if not candidates:
+                return None
+
+            parts = candidates[0].get("content", {}).get("parts", [{}])
+            raw_text = "".join(p.get("text", "") for p in parts if not p.get("thought", False))
+
+            match = re.search(r'<response>(.*?)</response>', raw_text, re.DOTALL | re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+            elif "<response>" in raw_text.lower():
+                split_parts = re.split(r'<response>', raw_text, flags=re.IGNORECASE)
+                return split_parts[-1].strip()
+            return raw_text.strip() or None
+    except Exception as e:
+        logger.error("Erro na chamada da API Gemini: %s", str(e))
+        return None
+
+
+def evaluate_project_with_gemini(project: dict) -> dict:
+    title = project.get("title", "")
+    summary = project.get("summary", "")
+
+    system = (
+        "Você é o analista de governança de marca da Azul Linhas Aéreas.\n"
+        "Sua função é avaliar projetos propostos sob a lente dos guardrails de marca.\n"
+        f"{KNOWLEDGE_BASE}\n\n"
+        "Com base na BASE DE CONHECIMENTO acima, avalie o projeto proposto e retorne APENAS um JSON válido dentro da tag <response> com a seguinte estrutura:\n"
+        '{\n'
+        '  "classificacao": "APROVADO" | "APROVAÇÃO CONDICIONAL" | "BLOQUEADO",\n'
+        '  "score": 0-100,\n'
+        '  "justificativa": "texto curto explicando a decisão",\n'
+        '  "plano_acao": "texto curto com recomendações"\n'
+        '}\n\n'
+        "Regras:\n"
+        "- Score >= 70: APROVADO\n"
+        "- Score entre 40 e 69: APROVAÇÃO CONDICIONAL\n"
+        "- Score < 40: BLOQUEADO\n"
+        "- Se houver risco de conectividade ou atendimento humanizado, o score deve ser reduzido significativamente.\n"
+        "- Se o projeto mencionar brasilidade ou inovação positiva, considere um bônus de até 10 pontos.\n"
+        "- Seja rigoroso: projetos que repetem erros do Caso 001 (corte de conectividade sem consulta ao Marketing) devem ser BLOQUEADOS."
+    )
+
+    user_text = f"Título: {title}\nResumo: {summary}"
+
+    result_text = _call_gemini(system, user_text)
+    if result_text:
+        try:
+            parsed = json.loads(result_text)
+            return {
+                "classificacao": parsed.get("classificacao", "APROVAÇÃO CONDICIONAL"),
+                "score": int(parsed.get("score", 50)),
+                "justificativa": parsed.get("justificativa", ""),
+                "plano_acao": parsed.get("plano_acao", ""),
+            }
+        except (_json.JSONDecodeError, ValueError, TypeError):
+            logger.warning("Falha ao interpretar resposta do Gemini como JSON: %.200s", result_text)
+            return None
+    return None
+
+
 @app.route("/api/health", methods=["GET"])
 def health_check():
     return jsonify({"status": "ok", "agent": "OmniBridge Brand Co-Pilot v1.1"}), 200
+
+
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    if not GEMINI_API_KEY:
+        return jsonify({"error": "Configuração da API Key do Gemini (.env) não encontrada."}), 500
+
+    body = request.get_json(silent=True) or {}
+    message = body.get("message", "").strip()
+    history = body.get("history", [])
+
+    if not message:
+        return jsonify({"error": "A mensagem não pode estar vazia."}), 400
+
+    contents = []
+    for msg in history:
+        role = msg.get("role")
+        content = msg.get("content", "")
+        if role in ("user", "model") and content:
+            contents.append({
+                "role": role,
+                "parts": [{"text": content}]
+            })
+
+    contents.append({
+        "role": "user",
+        "parts": [{"text": message}]
+    })
+
+    system_instruction = (
+        "Você é o OmniBridge Assist, o assistente inteligente da plataforma OmniBridge da Azul.\n"
+        "Seu objetivo é ajudar os colaboradores da Azul a entenderem os guardrails de marca e alinhar/validar suas propostas de projetos.\n"
+        "Use a seguinte Base de Conhecimento para fundamentar suas respostas:\n"
+        f"{KNOWLEDGE_BASE}\n\n"
+        "Instruções:\n"
+        "- Responda em português de forma amigável, clara e concisa.\n"
+        "- Seja muito direto e evite reflexões longas no seu raciocínio.\n"
+        "- Se o usuário propor uma ideia de projeto, avalie-a sob a lente dos guardrails de marca e cite o Caso 001 ou outros guardrails se aplicável.\n"
+        "- Você DEVE envolver estritamente a resposta final que será exibida para o usuário dentro da tag <response>...</response>."
+    )
+
+    payload = {
+        "systemInstruction": {
+            "parts": [{"text": system_instruction}]
+        },
+        "contents": contents
+    }
+
+    model_name = "models/gemma-4-26b-a4b-it"
+    url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent?key={GEMINI_API_KEY}"
+
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=60) as response:
+            res_data = json.loads(response.read().decode())
+            
+            candidates = res_data.get("candidates", [])
+            if not candidates:
+                return jsonify({"error": "Nenhuma resposta gerada pelo modelo."}), 500
+            
+            parts = candidates[0].get("content", {}).get("parts", [{}])
+            raw_text = "".join(p.get("text", "") for p in parts if not p.get("thought", False))
+            
+            match = re.search(r'<response>(.*?)</response>', raw_text, re.DOTALL | re.IGNORECASE)
+            if match:
+                bot_message = match.group(1).strip()
+            elif "<response>" in raw_text.lower():
+                parts = re.split(r'<response>', raw_text, flags=re.IGNORECASE)
+                bot_message = parts[-1].strip()
+            else:
+                bot_message = raw_text.strip()
+                
+            return jsonify({"response": bot_message}), 200
+
+    except Exception as e:
+        logger.error("Erro na chamada da API Gemini: %s", str(e))
+        return jsonify({"error": f"Falha na comunicação com o assistente: {str(e)}"}), 500
+
 
 
 @app.route("/api/analyze", methods=["POST"])
@@ -672,11 +859,21 @@ def projects():
         existing.setdefault("relatedProjects", []).append({"id": new_project['id'], "title": new_project['title'], "similarity": match['similarity']})
         existing['similarityScore'] = max(existing.get('similarityScore', 0), match['similarity'])
         existing['similarityType'] = "Projeto quase idêntico" if existing['similarityScore'] >= 70 else "Objetivos parecidos" if existing['similarityScore'] >= 40 else "Leves similaridades"
-        existing['marketingAlert'] = existing.get('marketingAlert', False) or True
+        existing['marketingAlert'] = existing.get('marketingAlert', False) or (match['similarity'] >= 50)
         existing['alertReason'] = "Projeto semelhante encontrado; revisar com as áreas envolvidas."
         existing['alertSeverity'] = "MÉDIA"
         existing.setdefault('similarityMatches', []).append({'id': new_project['id'], 'title': new_project['title'], 'similarity': match['similarity'], 'org': organization})
-        existing['similarityNotifications'] = ['marketing', 'owners']
+        existing['similarityNotifications'] = ['marketing']
+
+    ai_eval = evaluate_project_with_gemini(new_project)
+    if ai_eval:
+        new_project["aiEvaluation"] = ai_eval
+        new_project["aiClassificacao"] = ai_eval["classificacao"]
+        new_project["aiScore"] = ai_eval["score"]
+    else:
+        new_project["aiEvaluation"] = None
+        new_project["aiClassificacao"] = "Não avaliado"
+        new_project["aiScore"] = None
 
     PROJECTS.insert(0, new_project)
 
@@ -721,20 +918,38 @@ def serve_asset(filename: str):
 
 
 def find_available_port(start_port: int) -> int:
+    """Tenta ligar na porta `start_port`.
+
+    Comportamento padrão: se a porta estiver em uso, aborta imediatamente com
+    uma exceção para deixar explícito ao chamador que a porta requisitada
+    não está disponível. Para permitir fallback automático para a próxima
+    porta livre, exporte `PORT_FALLBACK=true` no ambiente.
+    """
+    fallback = os.environ.get("PORT_FALLBACK", "false").lower() == "true"
     port = start_port
-    while True:
+    max_port = start_port + 1000
+    while port <= max_port:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 sock.bind(("0.0.0.0", port))
                 return port
             except OSError:
+                if not fallback:
+                    logger.error("Port %s already in use and PORT_FALLBACK not set. Aborting.", start_port)
+                    raise RuntimeError(f"Port {start_port} already in use.")
                 port += 1
+    raise RuntimeError(f"Could not find an available port in range {start_port}-{max_port}.")
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5001))
-    port = find_available_port(port)
+    try:
+        port = find_available_port(port)
+    except RuntimeError as exc:
+        logger.error(str(exc))
+        logger.info("To allow automatic fallback to a free port, set PORT_FALLBACK=true")
+        sys.exit(1)
     debug = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
     logger.info("Iniciando servidor em http://0.0.0.0:%s (debug=%s)", port, debug)
     # Evita que o reloader do Werkzeug reinicie o processo em outra porta automaticamente.

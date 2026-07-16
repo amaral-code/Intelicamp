@@ -137,9 +137,22 @@
     .field input, .field select { border: 1px solid var(--cinza-100); border-radius: 12px; padding: 12px 14px; background: var(--branco); }
     .field input:focus, .field select:focus { outline: 2px solid rgba(59, 158, 255, 0.18); border-color: var(--azul-destaque); }
     .login-actions { display: flex; gap: 10px; margin-top: 12px; }
-    .btn { border: none; border-radius: 999px; padding: 12px 16px; font-weight: 700; }
+    .btn {
+      border: none;
+      border-radius: 999px;
+      padding: 12px 16px;
+      font-weight: 700;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+      box-shadow: 0 4px 12px rgba(10, 26, 61, 0.06);
+    }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(10, 26, 61, 0.12); }
+    .btn:active { transform: translateY(0); }
     .btn-primary { background: var(--azul-destaque); color: var(--branco); }
     .btn-secondary { background: var(--cinza-100); color: var(--cinza-600); }
+    .btn-secondary:hover { background: #e6ebf2; }
+    .nav-item { width: 100%; border: none; background: transparent; color: inherit; padding: 12px 14px; border-radius: 12px; text-align: left; margin-bottom: 8px; font-weight: 600; transition: background-color 0.15s ease, transform 0.15s ease; }
+    .nav-item:hover { background: rgba(255,255,255,0.08); transform: translateX(2px); }
+    .nav-item.active { background: rgba(255,255,255,0.12); }
     .muted { font-size: 12px; color: var(--cinza-300); margin-top: 10px; }
 
     .app-shell { display: none; min-height: 100vh; background: var(--cinza-50); }
@@ -152,7 +165,8 @@
 
     .content { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 76px); }
     .sidebar { background: var(--azul-escuro-secundario); color: #eaf3ff; padding: 22px 18px; }
-    .nav-item { width: 100%; border: none; background: transparent; color: inherit; padding: 12px 14px; border-radius: 12px; text-align: left; margin-bottom: 8px; font-weight: 600; }
+    .nav-item { width: 100%; border: none; background: transparent; color: inherit; padding: 12px 14px; border-radius: 12px; text-align: left; margin-bottom: 8px; font-weight: 600; transition: background-color 0.15s ease, transform 0.15s ease; }
+    .nav-item:hover { background: rgba(255,255,255,0.08); transform: translateX(2px); }
     .nav-item.active { background: rgba(255,255,255,0.12); }
     .sidebar .small { font-size: 11px; text-transform: uppercase; letter-spacing: 0.16em; opacity: 0.6; margin: 18px 0 10px; padding-left: 6px; }
     .main { padding: 24px; display: flex; flex-direction: column; gap: 18px; }
@@ -193,6 +207,15 @@
     .chip.yellow { background: #fff3d6; color: var(--warning); }
     .chip.red { background: #ffe4eb; color: var(--danger); }
 
+    .dashboard-item { background: var(--cinza-50); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .dashboard-title { display: flex; align-items: center; font-size: 15px; }
+    .vote-bar-container { display: flex; align-items: center; gap: 12px; }
+    .vote-bar { flex: 1; height: 8px; border-radius: 999px; background: var(--cinza-200); display: flex; overflow: hidden; }
+    .vote-bar-fill { height: 100%; transition: width 0.3s ease; }
+    .vote-bar-ok { background: var(--success); }
+    .vote-bar-nao { background: var(--danger); }
+    .vote-bar-label { font-size: 12px; color: var(--cinza-500); white-space: nowrap; }
+
     form .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .field.full { grid-column: 1 / -1; }
     .project-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -213,6 +236,161 @@
     .brand-result strong { display: block; margin-bottom: 8px; color: var(--cinza-900); }
     .brand-result p { margin: 0 0 8px; color: var(--cinza-600); }
     .empty { color: var(--cinza-300); font-size: 14px; }
+    .assistant-bubble {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 40;
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, var(--azul-destaque), #1767c2);
+      color: var(--branco);
+      font-size: 24px;
+      box-shadow: 0 14px 36px rgba(11, 34, 83, 0.24);
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    .assistant-bubble:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 18px 42px rgba(11, 34, 83, 0.3); }
+    .assistant-panel {
+      position: fixed;
+      right: 24px;
+      bottom: 96px;
+      width: min(380px, calc(100vw - 32px));
+      height: 480px;
+      z-index: 41;
+      background: var(--branco);
+      border-radius: 24px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--cinza-100);
+      overflow: hidden;
+    }
+    .assistant-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px;
+      background: var(--azul-escuro);
+      color: var(--branco);
+    }
+    .assistant-chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: #fbfcfe;
+    }
+    .chat-history {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .chat-msg {
+      display: flex;
+      gap: 8px;
+      max-width: 85%;
+    }
+    .chat-msg.bot {
+      align-self: flex-start;
+    }
+    .chat-msg.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+      max-width: 80%;
+    }
+    .chat-msg .avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--azul-destaque), #1767c2);
+      color: var(--branco);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+    .chat-msg.user .avatar {
+      background: var(--cinza-600);
+    }
+    .chat-msg .msg-bubble {
+      padding: 10px 14px;
+      border-radius: 16px;
+      font-size: 13px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .chat-msg.bot .msg-bubble {
+      background: var(--cinza-100);
+      color: var(--cinza-900);
+      border-top-left-radius: 4px;
+    }
+    .chat-msg.user .msg-bubble {
+      background: var(--azul-destaque);
+      color: var(--branco);
+      border-top-right-radius: 4px;
+      box-shadow: 0 4px 12px rgba(59, 158, 255, 0.15);
+    }
+    
+    .assistant-form {
+      display: flex;
+      padding: 12px;
+      background: var(--branco);
+      border-top: 1px solid var(--cinza-100);
+      gap: 8px;
+      margin: 0;
+    }
+    .assistant-form input {
+      flex: 1;
+      border: 1px solid var(--cinza-100);
+      border-radius: 999px;
+      padding: 10px 16px;
+      font-size: 13px;
+      background: var(--cinza-50);
+      outline: none;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+    .assistant-form input:focus {
+      border-color: var(--azul-destaque);
+      background: var(--branco);
+    }
+    .assistant-form button {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      flex-shrink: 0;
+    }
+    
+    .msg-bubble.typing {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 18px;
+      padding: 8px 14px;
+    }
+    .msg-bubble.typing span {
+      width: 6px;
+      height: 6px;
+      background-color: var(--cinza-300);
+      border-radius: 50%;
+      display: inline-block;
+      animation: bounce 1.3s infinite ease-in-out;
+    }
+    .msg-bubble.typing span:nth-child(2) { animation-delay: -1.1s; }
+    .msg-bubble.typing span:nth-child(3) { animation-delay: -0.9s; }
+    
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-5px); }
+    }
 
     @media (max-width: 980px) {
       .login-screen { grid-template-columns: 1fr; }
@@ -252,11 +430,12 @@
         <p>Selecione seu cargo, organização e área para entrar na experiência demo do OmniBridge.</p>
         <div class="field">
           <label for="nameInput">Nome</label>
-          <input id="nameInput" value="Carla Nogueira" />
+          <input id="nameInput" placeholder="Seu Nome" />
         </div>
         <div class="field">
           <label for="roleInput">Cargo / nível</label>
           <select id="roleInput">
+            <option value="">Selecione uma opção</option>
             <option value="Analista">Analista</option>
             <option value="Especialista">Especialista</option>
             <option value="Coordenador">Coordenador</option>
@@ -270,6 +449,7 @@
         <div class="field">
           <label for="organizationInput">Organização / Unidade</label>
           <select id="organizationInput">
+            <option value="">Selecione uma opção</option>
             <option>Azul Logística</option>
             <option>Azul Viagens</option>
             <option>Azul Fidelidade</option>
@@ -280,6 +460,7 @@
         <div class="field">
           <label for="areaInput">Área funcional</label>
           <select id="areaInput">
+            <option value="">Selecione uma opção</option>
             <option>Marketing</option>
             <option>Finanças</option>
             <option>Logística</option>
@@ -320,8 +501,8 @@
         <div class="small">Navegação</div>
         <button class="nav-item active" data-view="home">Home</button>
         <button class="nav-item" data-view="inbox">Inbox & Alertas</button>
+        <button class="nav-item" data-view="dashboard">Dashboard</button>
         <button class="nav-item" data-view="channel">Canal de Projetos</button>
-        <button class="nav-item" data-view="brand">Agente de Marca</button>
         <div class="small">Ações</div>
         <button class="nav-item" id="logoutBtn">Sair</button>
       </aside>
@@ -360,6 +541,12 @@
           <h3>Inbox de alertas</h3>
           <p>Marketing e líderes recebem sinalizações automáticas quando um projeto pode conflitar com a marca, se parecer muito semelhante a um existente ou aumentar risco de imagem.</p>
           <div id="alertsList" class="upcoming-list"></div>
+        </section>
+
+        <section id="viewDashboard" class="panel hidden">
+          <h3>Dashboard de projetos</h3>
+          <p>Status de aprovação por IA e feedback de votos da equipe.</p>
+          <div id="dashboardList" class="upcoming-list"></div>
         </section>
 
         <section id="viewChannel" class="hidden">
@@ -459,43 +646,48 @@
           </div>
         </section>
 
-        <section id="viewBrand" class="hidden">
-          <div class="grid-2">
-            <div class="panel">
-              <h3>Agente de marca e valores Azul</h3>
-              <p>O agente avalia a iniciativa de acordo com a identidade Azul e sinaliza o que precisa ser revisado com Marketing.</p>
-              <form id="brandForm">
-                <div class="row">
-                  <div class="field">
-                    <label>Unidade</label>
-                    <input id="brandBu" placeholder="Ex.: Azul Viagens" />
-                  </div>
-                  <div class="field">
-                    <label>Ideia</label>
-                    <input id="brandIdea" placeholder="Descreva o projeto" />
-                  </div>
-                </div>
-                <div class="login-actions">
-                  <button type="submit" class="btn btn-primary">Validar com agente</button>
-                </div>
-              </form>
-              <div id="brandResult"></div>
-            </div>
-            <div class="panel">
-              <h3>Uso interno do agente</h3>
-              <div class="alert-card success">
-                <strong>Validação interna</strong>
-                <span>Os critérios de marca são aplicados pelo agente em segundo plano para orientar o fluxo de revisão e notificação.</span>
-              </div>
-              <div class="alert-card warning">
-                <strong>Notificações automáticas</strong>
-                <span>Quando há risco de guarda, similaridade ou impacto de imagem, o Marketing e os proprietários dos projetos relacionados recebem aviso.</span>
-              </div>
-            </div>
-          </div>
-        </section>
       </main>
     </div>
+  </div>
+
+  <button id="assistantBubble" class="assistant-bubble" type="button" aria-label="Abrir assistente">✦</button>
+
+  <div id="assistantPanel" class="assistant-panel hidden">
+    <div class="assistant-header">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:18px;">✦</span>
+        <strong>OmniBridge Assist</strong>
+      </div>
+      <button type="button" id="assistantClose" class="btn btn-small btn-secondary" style="border-radius:12px;padding:4px 8px;">✕</button>
+    </div>
+    <div class="assistant-chat-container">
+      <div id="chatHistory" class="chat-history">
+        <div class="chat-msg bot">
+          <div class="avatar">✦</div>
+          <div class="msg-bubble">
+            Olá, sou o chatbot da OmniBridge! Estou aqui para te ajudar com qualquer dúvida ou alinhar suas ideias com os ideais da empresa (como a conectividade e o atendimento humanizado).
+          </div>
+        </div>
+        <div class="chat-msg bot">
+          <div class="avatar">✦</div>
+          <div class="msg-bubble">
+            Como posso ajudar você hoje? Você pode propor uma ideia de projeto para eu avaliar seu alinhamento!
+          </div>
+        </div>
+      </div>
+      
+      <div id="chatTyping" class="chat-msg bot hidden">
+        <div class="avatar">✦</div>
+        <div class="msg-bubble typing">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    </div>
+    
+    <form id="assistantForm" class="assistant-form">
+      <input type="text" id="assistantInput" placeholder="Envie uma mensagem ou proposta..." required autocomplete="off" />
+      <button type="submit" class="btn btn-primary" aria-label="Enviar mensagem">➔</button>
+    </form>
   </div>
 
   <div id="projectModal" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,0.35); display:flex; align-items:center; justify-content:center; padding:20px; z-index:30;">
@@ -527,8 +719,6 @@
     const projectList = document.getElementById('projectList');
     const projectForm = document.getElementById('projectForm');
     const projectRestrictionNotice = document.getElementById('projectRestrictionNotice');
-    const brandForm = document.getElementById('brandForm');
-    const brandResult = document.getElementById('brandResult');
     const searchInput = document.getElementById('searchInput');
     const filterOrg = document.getElementById('filterOrg');
     const projectModal = document.getElementById('projectModal');
@@ -549,8 +739,9 @@
       document.querySelectorAll('[data-view]').forEach(btn => btn.classList.toggle('active', btn.dataset.view === view));
       document.getElementById('viewHome').classList.toggle('hidden', view !== 'home');
       document.getElementById('viewInbox').classList.toggle('hidden', view !== 'inbox');
+      document.getElementById('viewDashboard').classList.toggle('hidden', view !== 'dashboard');
       document.getElementById('viewChannel').classList.toggle('hidden', view !== 'channel');
-      document.getElementById('viewBrand').classList.toggle('hidden', view !== 'brand');
+      if (view === 'dashboard') renderDashboard();
     }
 
     function showProjectAccess(projectId) {
@@ -562,6 +753,14 @@
       const canCreate = Boolean(state.user?.canCreate);
       projectForm.classList.toggle('hidden', !canCreate);
       projectRestrictionNotice.classList.toggle('hidden', canCreate);
+    }
+
+    function toggleAssistantVisibility() {
+      const bubble = document.getElementById('assistantBubble');
+      const panel = document.getElementById('assistantPanel');
+      const shouldShow = Boolean(state.user) && appShell.classList.contains('active');
+      bubble.classList.toggle('hidden', !shouldShow);
+      if (!shouldShow) panel.classList.add('hidden');
     }
 
     function showToast(message) {
@@ -603,9 +802,11 @@
       loginScreen.classList.add('hidden');
       appShell.classList.add('active');
       updateProjectComposerAccess();
+      toggleAssistantVisibility();
       setView('home');
       renderAlerts();
       renderProjects();
+      renderDashboard();
     }
 
     async function voteOnProject(projectId, voteValue) {
@@ -631,11 +832,12 @@
         }
         renderAlerts();
         renderProjects();
+        renderDashboard();
         if (state.selectedProjectId === projectId && !projectModal.classList.contains('hidden')) {
           const qualDiv = document.getElementById('modalQualification');
           if (qualDiv) qualDiv.innerHTML = renderQualificationVotes(state.projects[idx] || project);
         }
-        showToast(`Voto registrado: ${voteValue === 'qualificado' ? 'Qualificado' : 'Não qualificado'}`);
+        showToast('Feedback de revisão registrado.');
       } catch (e) {
         showToast('Erro ao registrar voto');
       }
@@ -655,6 +857,7 @@
       });
       renderAlerts();
       renderProjects();
+      renderDashboard();
       updateProjectComposerAccess();
     }
 
@@ -664,14 +867,11 @@
       const nao = votes.filter(v => v.vote === 'nao_qualificado').length;
       const total = votes.length;
 
-      let statusText = 'Aguardando votos';
+      let statusText = 'Aguardando feedback';
       let statusClass = 'yellow';
-      if (qual >= 5) {
-        statusText = 'Aprovado';
-        statusClass = 'green';
-      } else if (nao >= 5) {
-        statusText = 'Rejeitado';
-        statusClass = 'red';
+      if (total > 0) {
+        statusText = 'Feedback de revisão';
+        statusClass = 'yellow';
       }
 
       const directorQual = votes.filter(v => v.vote === 'qualificado' && (v.role === 'Diretor' || v.role === 'Executivo' || v.role === 'VP / Superintendente'));
@@ -703,6 +903,11 @@
     }
 
     function renderAlerts() {
+      if (!state.user?.isMarketing) {
+        alertsList.innerHTML = '<div class="empty">A inbox de alertas é exclusiva para o time de Marketing.</div>';
+        return;
+      }
+
       const alerts = state.projects.filter(project => project.marketingAlert);
       if (!alerts.length) {
         alertsList.innerHTML = '<div class="empty">Nenhum alerta crítico neste momento. O agente está monitorando.</div>';
@@ -720,6 +925,41 @@
             <span style="font-size:12px;color:var(--cinza-300);">${project.org} • ${(project.areas || []).join(', ')}</span>
           </div>
           ${qualHtml}
+        </div>`;
+      }).join('');
+    }
+
+    function renderDashboard() {
+      if (!state.projects.length) {
+        document.getElementById('dashboardList').innerHTML = '<div class="empty">Nenhum projeto submetido ainda.</div>';
+        return;
+      }
+
+      document.getElementById('dashboardList').innerHTML = state.projects.map(project => {
+        const votes = project.votes || [];
+        const qual = votes.filter(v => v.vote === 'qualificado').length;
+        const nao = votes.filter(v => v.vote === 'nao_qualificado').length;
+        const total = votes.length;
+        const qualPct = total > 0 ? (qual / total * 100) : 0;
+        const naoPct = total > 0 ? (nao / total * 100) : 0;
+
+        const aiClass = project.aiClassificacao;
+        const isApproved = aiClass === 'APROVADO';
+        const isConditional = aiClass === 'APROVAÇÃO CONDICIONAL';
+        const barColor = isApproved ? 'var(--success)' : isConditional ? 'var(--warning)' : 'var(--danger)';
+
+        return `<div class="dashboard-item">
+          <div class="dashboard-title" style="color:${barColor};border-left:4px solid ${barColor};padding-left:10px;">
+            <strong>${project.title}</strong>
+            <span class="chip" style="background:${barColor};color:#fff;font-size:11px;margin-left:8px;">${aiClass || 'Não avaliado'}${project.aiScore != null ? ' (' + project.aiScore + '/100)' : ''}</span>
+          </div>
+          <div class="vote-bar-container">
+            <div class="vote-bar">
+              <div class="vote-bar-fill vote-bar-ok" style="width:${qualPct}%"></div>
+              <div class="vote-bar-fill vote-bar-nao" style="width:${naoPct}%"></div>
+            </div>
+            <span class="vote-bar-label">${total > 0 ? qual + ' a favor · ' + nao + ' contra' : 'Sem votos'}</span>
+          </div>
         </div>`;
       }).join('');
     }
@@ -742,22 +982,28 @@
         const chipClass = project.similarityScore > 70 ? 'red' : project.similarityScore > 35 ? 'yellow' : 'green';
         const similarityBadge = project.similarityScore && project.similarityMatches && project.similarityMatches.length ? `<span class="chip ${chipClass}">${project.similarityType}</span>` : '';
         const relatedInfo = project.relatedProjects && project.relatedProjects.length ? `<div class="project-meta">Relacionados: ${project.relatedProjects.map(item => item.title).join(', ')}</div>` : '';
+        const similarCount = project.similarityMatches ? project.similarityMatches.length : 0;
+        const similarityHint = similarCount ? `<div class="project-meta">${similarCount} projeto(s) com ideias semelhantes</div>` : '';
         const votes = project.votes || [];
         const qualCount = votes.filter(v => v.vote === 'qualificado').length;
         const naoCount = votes.filter(v => v.vote === 'nao_qualificado').length;
         let qualStatus = '';
-        if (qualCount >= 5) qualStatus = '<span class="chip green" style="font-size:11px;">Aprovado</span>';
-        else if (naoCount >= 5) qualStatus = '<span class="chip red" style="font-size:11px;">Rejeitado</span>';
-        else if (votes.length > 0) qualStatus = `<span class="chip yellow" style="font-size:11px;">${qualCount}/${naoCount} votos</span>`;
+        if (votes.length > 0) qualStatus = `<span class="chip yellow" style="font-size:11px;">Feedback de revisão</span>`;
+        const aiClass = project.aiClassificacao;
+        const aiChip = aiClass && aiClass !== 'Não avaliado'
+          ? `<span class="chip ${aiClass === 'APROVADO' ? 'green' : aiClass === 'APROVAÇÃO CONDICIONAL' ? 'yellow' : 'red'}">${aiClass}</span>`
+          : '';
         return `<article class="project-card">
           <div class="project-actions">
             <strong>${project.title}</strong>
+            ${aiChip}
             ${similarityBadge}
           </div>
           <div class="project-meta">${project.org} • ${project.areas.join(', ')} • ${project.ownerRole}</div>
           <p>${project.summary}</p>
           <div class="tags">${project.references.slice(0, 2).map(r => `<span class="tag">${r}</span>`).join('')}</div>
           ${relatedInfo}
+          ${similarityHint}
           <div class="project-actions" style="margin-top:8px;">
             <span style="display:flex;gap:6px;align-items:center;">
               <span class="chip ${project.marketingAlert ? 'red' : 'green'}">${project.marketingAlert ? 'Marketing notificado' : 'Pronto para revisão'}</span>
@@ -774,6 +1020,18 @@
       if (!project) return;
       state.selectedProjectId = projectId;
       document.getElementById('modalTitle').textContent = project.title;
+      const similarProjects = (project.similarityMatches || []).map(match => `<button class="btn btn-small btn-secondary" type="button" onclick="showProjectAccess('${match.id}')">${match.title}</button>`).join('');
+      const aiEval = project.aiEvaluation;
+      const aiHtml = aiEval
+        ? `<div class="alert-card ${aiEval.classificacao === 'APROVADO' ? 'success' : aiEval.classificacao === 'APROVAÇÃO CONDICIONAL' ? 'warning' : 'critical'}" style="margin-top:12px;">
+            <strong>Avaliação da IA — ${aiEval.classificacao} (Score: ${aiEval.score}/100)</strong>
+            <p style="margin:6px 0 0;font-size:13px;">${aiEval.justificativa}</p>
+            <p style="margin:4px 0 0;font-size:12px;color:var(--cinza-500);"><em>${aiEval.plano_acao}</em></p>
+          </div>`
+        : project.aiClassificacao === 'Não avaliado'
+          ? `<div class="alert-card success" style="margin-top:12px;"><strong>Avaliação da IA</strong><p style="margin:6px 0 0;font-size:13px;">Avaliação não disponível no momento.</p></div>`
+          : '';
+
       modalContent.innerHTML = `
         <div class="alert-card ${project.marketingAlert ? 'critical' : 'success'}">
           <strong>${project.org}</strong>
@@ -781,6 +1039,8 @@
         </div>
         <div class="project-meta" style="margin-top:10px;">Áreas: ${project.areas.join(', ')} • Similaridade: ${project.similarityScore}% • ${project.similarityType}</div>
         <div class="tags" style="margin-top:10px;">${project.references.map(ref => `<span class="tag">${ref}</span>`).join('')}</div>
+        ${project.similarityMatches && project.similarityMatches.length ? `<div style="margin-top:12px;"><strong>Projetos similares</strong><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">${similarProjects}</div></div>` : ''}
+        ${aiHtml}
         <hr style="margin:14px 0;border:none;border-top:1px solid var(--cinza-100);" />
         <div id="modalQualification">${renderQualificationVotes(project)}</div>
       `;
@@ -820,30 +1080,9 @@
       state.projects.unshift(data.project);
       renderAlerts();
       renderProjects();
+      renderDashboard();
       showToast('Projeto submetido com alerta de marketing e similaridade analisado.');
       projectForm.reset();
-    });
-
-    brandForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const payload = {
-        bu_name: document.getElementById('brandBu').value,
-        project_idea: document.getElementById('brandIdea').value,
-      };
-      const response = await fetch('/api/brand-check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-      brandResult.innerHTML = `
-        <div class="brand-result">
-          <strong>Risco reputacional: ${data.risco_reputacional || 'N/A'}</strong>
-          <p>${data.recomendacao || ''}</p>
-          <p>${data.alinhamento_identidade || ''}</p>
-          <p><strong>Marketing:</strong> Alertas serão enviados para revisão caso a iniciativa toque em imagem, conectividade ou similaridade.</p>
-        </div>
-      `;
     });
 
     commentForm.addEventListener('submit', async (event) => {
@@ -861,10 +1100,98 @@
       commentText.value = '';
       renderProjects();
       renderAlerts();
+      renderDashboard();
     });
 
     document.querySelectorAll('.nav-item[data-view]').forEach(button => {
       button.addEventListener('click', () => setView(button.dataset.view));
+    });
+
+    let chatHistory = [];
+
+    const assistantForm = document.getElementById('assistantForm');
+    const assistantInput = document.getElementById('assistantInput');
+    const chatHistoryDiv = document.getElementById('chatHistory');
+    const chatTyping = document.getElementById('chatTyping');
+    const chatContainer = document.querySelector('.assistant-chat-container');
+
+    assistantForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const messageText = assistantInput.value.trim();
+      if (!messageText) return;
+
+      assistantInput.value = '';
+      appendChatMessage('user', messageText);
+      chatHistory.push({ role: 'user', content: messageText });
+      chatTyping.classList.remove('hidden');
+      scrollToBottom();
+
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: messageText,
+            history: chatHistory.slice(0, -1)
+          })
+        });
+
+        const data = await response.json();
+        chatTyping.classList.add('hidden');
+
+        if (response.ok && data.response) {
+          appendChatMessage('model', data.response);
+          chatHistory.push({ role: 'model', content: data.response });
+        } else {
+          const errMsg = data.error || 'Erro desconhecido ao processar sua solicitação.';
+          appendChatMessage('model', `Desculpe, ocorreu um erro: ${errMsg}`);
+        }
+      } catch (err) {
+        chatTyping.classList.add('hidden');
+        appendChatMessage('model', 'Não consegui me comunicar com o servidor. Por favor, verifique se o servidor backend está rodando.');
+      }
+      scrollToBottom();
+    });
+
+    function appendChatMessage(role, content) {
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `chat-msg ${role === 'user' ? 'user' : 'bot'}`;
+      
+      const avatarDiv = document.createElement('div');
+      avatarDiv.className = 'avatar';
+      avatarDiv.textContent = role === 'user' ? 'U' : '✦';
+      
+      const bubbleDiv = document.createElement('div');
+      bubbleDiv.className = 'msg-bubble';
+      
+      const formattedContent = content
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/\n/g, '<br>');
+        
+      bubbleDiv.innerHTML = formattedContent;
+      
+      msgDiv.appendChild(avatarDiv);
+      msgDiv.appendChild(bubbleDiv);
+      chatHistoryDiv.appendChild(msgDiv);
+    }
+
+    function scrollToBottom() {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    document.getElementById('assistantBubble').addEventListener('click', () => {
+      document.getElementById('assistantPanel').classList.toggle('hidden');
+      if (!document.getElementById('assistantPanel').classList.contains('hidden')) {
+        scrollToBottom();
+        assistantInput.focus();
+      }
+    });
+    document.getElementById('assistantClose').addEventListener('click', () => {
+      document.getElementById('assistantPanel').classList.add('hidden');
     });
 
     document.getElementById('loginBtn').addEventListener('click', loginWithDemo);
@@ -880,12 +1207,32 @@
       state.user = null;
       state.projects = [];
       updateProjectComposerAccess();
+      toggleAssistantVisibility();
+      renderDashboard();
+      
+      // Reseta chat
+      chatHistory = [];
+      chatHistoryDiv.innerHTML = `
+        <div class="chat-msg bot">
+          <div class="avatar">✦</div>
+          <div class="msg-bubble">
+            Olá, sou o chatbot da OmniBridge! Estou aqui para te ajudar com qualquer dúvida ou alinhar suas ideias com os ideais da empresa (como a conectividade e o atendimento humanizado).
+          </div>
+        </div>
+        <div class="chat-msg bot">
+          <div class="avatar">✦</div>
+          <div class="msg-bubble">
+            Como posso ajudar você hoje? Você pode propor uma ideia de projeto para eu avaliar seu alinhamento!
+          </div>
+        </div>
+      `;
     });
     document.getElementById('clearFormBtn').addEventListener('click', () => projectForm.reset());
     [searchInput, filterOrg].forEach(input => input.addEventListener('input', renderProjects));
     [searchInput, filterOrg].forEach(input => input.addEventListener('change', renderProjects));
 
     updateProjectComposerAccess();
+    toggleAssistantVisibility();
     loadProjects();
   </script>
 </body>
