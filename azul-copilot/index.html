@@ -886,34 +886,61 @@
     }
 
     async function loginWithDemo() {
-      const payload = {
-        name: document.getElementById('nameInput').value || 'Usuário demo',
-        roleLevel: document.getElementById('roleInput').value,
-        organization: document.getElementById('organizationInput').value,
-        area: document.getElementById('areaInput').value,
-      };
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-      state.user = data.user;
-      state.projects = (data.projects || []).map(p => {
-        const userVote = (p.votes || []).find(v => v.userId === state.user.id);
-        p._userVote = userVote ? userVote.vote : null;
-        return p;
-      });
-      userPill.textContent = `${state.user.name} • ${state.user.roleLevel}`;
-      landingScreen.classList.add('hidden');
-      loginScreen.classList.add('hidden');
-      appShell.classList.add('active');
-      updateProjectComposerAccess();
-      toggleAssistantVisibility();
-      setView('home');
-      renderAlerts();
-      renderProjects();
-      renderDashboard();
+      const btn = document.getElementById('loginBtn');
+      btn.disabled = true;
+      btn.textContent = 'Entrando…';
+      try {
+        const payload = {
+          name: document.getElementById('nameInput').value || 'Usuário demo',
+          roleLevel: document.getElementById('roleInput').value,
+          organization: document.getElementById('organizationInput').value,
+          area: document.getElementById('areaInput').value,
+        };
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          let errorMsg = 'Erro ao entrar';
+          try {
+            const errData = await response.json();
+            errorMsg = errData.error || errorMsg;
+          } catch (_) {}
+          showToast(errorMsg);
+          btn.disabled = false;
+          btn.textContent = 'Entrar';
+          return;
+        }
+        const data = await response.json();
+        if (!data.user) {
+          showToast('Resposta inválida do servidor.');
+          btn.disabled = false;
+          btn.textContent = 'Entrar';
+          return;
+        }
+        state.user = data.user;
+        state.projects = (data.projects || []).map(p => {
+          const userVote = (p.votes || []).find(v => v.userId === state.user.id);
+          p._userVote = userVote ? userVote.vote : null;
+          return p;
+        });
+        userPill.textContent = `${state.user.name} • ${state.user.roleLevel}`;
+        landingScreen.classList.add('hidden');
+        loginScreen.classList.add('hidden');
+        appShell.classList.add('active');
+        updateProjectComposerAccess();
+        toggleAssistantVisibility();
+        setView('home');
+        renderAlerts();
+        renderProjects();
+        renderDashboard();
+      } catch (e) {
+        showToast('Erro de conexão com o servidor. Verifique se o backend está rodando.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Entrar';
+      }
     }
 
     async function voteOnProject(projectId, voteValue) {
@@ -951,21 +978,24 @@
     }
 
     async function loadProjects() {
-      const response = await fetch('/api/projects');
-      const data = await response.json();
-      state.projects = (data.projects || []).map(p => {
-        if (state.user) {
-          const userVote = (p.votes || []).find(v => v.userId === state.user.id);
-          p._userVote = userVote ? userVote.vote : null;
-        } else {
-          p._userVote = null;
-        }
-        return p;
-      });
-      renderAlerts();
-      renderProjects();
-      renderDashboard();
-      updateProjectComposerAccess();
+      try {
+        const response = await fetch('/api/projects');
+        if (!response.ok) return;
+        const data = await response.json();
+        state.projects = (data.projects || []).map(p => {
+          if (state.user) {
+            const userVote = (p.votes || []).find(v => v.userId === state.user.id);
+            p._userVote = userVote ? userVote.vote : null;
+          } else {
+            p._userVote = null;
+          }
+          return p;
+        });
+        renderAlerts();
+        renderProjects();
+        renderDashboard();
+        updateProjectComposerAccess();
+      } catch (_) {}
     }
 
     function renderQualificationVotes(project) {
