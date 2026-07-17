@@ -2,6 +2,7 @@ import os
 import logging
 import socket
 import sys
+import time
 from datetime import datetime, timezone
 from uuid import uuid4
 import urllib.request
@@ -536,7 +537,8 @@ def get_qualification(project_id: str):
     return jsonify({"qualification": qualification, "project": project}), 200
 
 
-def _call_gemini(system_instruction: str, user_text: str) -> str | None:
+def _call_gemini_with_retry(system_instruction: str, user_text: str, max_retries: int = 3) -> str | None:
+    """Chama a API Gemini com retry exponencial."""
     if not GEMINI_API_KEY:
         logger.warning("GEMINI_API_KEY não configurada")
         return None
@@ -549,31 +551,53 @@ def _call_gemini(system_instruction: str, user_text: str) -> str | None:
         "contents": [{"role": "user", "parts": [{"text": user_text}]}]
     }
 
-    try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req, timeout=60) as response:
-            res_data = json.loads(response.read().decode())
-            candidates = res_data.get("candidates", [])
-            if not candidates:
-                return None
+    for attempt in range(max_retries):
+        try:
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=60) as response:
+                res_data = json.loads(response.read().decode())
+                candidates = res_data.get("candidates", [])
+                if not candidates:
+                    return None
 
-            parts = candidates[0].get("content", {}).get("parts", [{}])
-            raw_text = "".join(p.get("text", "") for p in parts if not p.get("thought", False))
+                parts = candidates[0].get("content", {}).get("parts", [{}])
+                raw_text = "".join(p.get("text", "") for p in parts if not p.get("thought", False))
 
-            match = re.search(r'<response>(.*?)</response>', raw_text, re.DOTALL | re.IGNORECASE)
-            if match:
-                return match.group(1).strip()
-            elif "<response>" in raw_text.lower():
-                split_parts = re.split(r'<response>', raw_text, flags=re.IGNORECASE)
-                return split_parts[-1].strip()
-            return raw_text.strip() or None
-    except Exception as e:
-        logger.error("Erro na chamada da API Gemini: %s", str(e))
-        return None
+                match = re.search(r'<response>(.*?)</response>', raw_text, re.DOTALL | re.IGNORECASE)
+                if match:
+                    return match.group(1).strip()
+                elif "<response>" in raw_text.lower():
+                    split_parts = re.split(r'<response>', raw_text, flags=re.IGNORECASE)
+                    return split_parts[-1].strip()
+                return raw_text.strip() or None
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 500, 502, 503, 504):
+                wait_time = (2 ** attempt) + 0.5
+                logger.warning("Gemini API error %s, retrying in %.1fs (attempt %d/%d)", 
+                              e.code, wait_time, attempt + 1, max_retries)
+                time.sleep(wait_time)
+                continue
+            logger.error("Erro HTTP na API Gemini: %s", str(e))
+            return None
+        except (urllib.error.URLError, socket.timeout, TimeoutError) as e:
+            wait_time = (2 ** attempt) + 0.5
+            logger.warning("Erro de conexão com Gemini: %s, retrying in %.1fs (attempt %d/%d)", 
+                          str(e), wait_time, attempt + 1, max_retries)
+            time.sleep(wait_time)
+            continue
+        except Exception as e:
+            logger.error("Erro inesperado na chamada da API Gemini: %s", str(e))
+            return None
+    logger.error("Todas as tentativas de chamada à API Gemini falharam após %d retries", max_retries)
+    return None
+
+
+def _call_gemini(system_instruction: str, user_text: str) -> str | None:
+    return _call_gemini_with_retry(system_instruction, user_text)
 
 
 def evaluate_project_with_gemini(project: dict) -> dict:
@@ -623,6 +647,71 @@ def health_check():
     return jsonify({"status": "ok", "agent": "OmniBridge Brand Co-Pilot v1.1"}), 200
 
 
+def _call_gemini_chat(system_instruction: str, contents: list) -> str | None:
+    """Chama Gemini API com retry para o endpoint de chat."""
+    if not GEMINI_API_KEY:
+        logger.warning("GEMINI_API_KEY não configurada")
+        return None
+
+    model_name = "models/gemma-4-26b-a4b-it"
+    url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent?key={GEMINI_API_KEY}"
+
+    payload = {
+        "systemInstruction": {"parts": [{"text": system_instruction}]},
+        "contents": contents
+    }
+
+    max_retries = 3
+    base_delay = 2
+
+    for attempt in range(max_retries):
+        try:
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=60) as response:
+                res_data = json.loads(response.read().decode())
+                
+                candidates = res_data.get("candidates", [])
+                if not candidates:
+                    return None
+                
+                parts = candidates[0].get("content", {}).get("parts", [{}])
+                raw_text = "".join(p.get("text", "") for p in parts if not p.get("thought", False))
+                
+                match = re.search(r'<response>(.*?)</response>', raw_text, re.DOTALL | re.IGNORECASE)
+                if match:
+                    return match.group(1).strip()
+                elif "<response>" in raw_text.lower():
+                    split_parts = re.split(r'<response>', raw_text, flags=re.IGNORECASE)
+                    return split_parts[-1].strip()
+                return raw_text.strip() or None
+                
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)
+                logger.warning("Rate limited (429), retrying in %ds (attempt %d/%d)", delay, attempt + 1, max_retries)
+                time.sleep(delay)
+                continue
+            logger.error("HTTP error from Gemini API: %d - %s", e.code, e.reason)
+            return None
+        except urllib.error.URLError as e:
+            if attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)
+                logger.warning("Network error, retrying in %ds (attempt %d/%d): %s", delay, attempt + 1, max_retries, e)
+                time.sleep(delay)
+                continue
+            logger.error("Network error after retries: %s", e)
+            return None
+        except Exception as e:
+            logger.error("Erro na chamada da API Gemini: %s", str(e))
+            return None
+    
+    return None
+
+
 @app.route("/api/chat", methods=["POST"])
 def chat():
     if not GEMINI_API_KEY:
@@ -662,46 +751,12 @@ def chat():
         "- Você DEVE envolver estritamente a resposta final que será exibida para o usuário dentro da tag <response>...</response>."
     )
 
-    payload = {
-        "systemInstruction": {
-            "parts": [{"text": system_instruction}]
-        },
-        "contents": contents
-    }
-
-    model_name = "models/gemma-4-26b-a4b-it"
-    url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent?key={GEMINI_API_KEY}"
-
-    try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req, timeout=60) as response:
-            res_data = json.loads(response.read().decode())
-            
-            candidates = res_data.get("candidates", [])
-            if not candidates:
-                return jsonify({"error": "Nenhuma resposta gerada pelo modelo."}), 500
-            
-            parts = candidates[0].get("content", {}).get("parts", [{}])
-            raw_text = "".join(p.get("text", "") for p in parts if not p.get("thought", False))
-            
-            match = re.search(r'<response>(.*?)</response>', raw_text, re.DOTALL | re.IGNORECASE)
-            if match:
-                bot_message = match.group(1).strip()
-            elif "<response>" in raw_text.lower():
-                parts = re.split(r'<response>', raw_text, flags=re.IGNORECASE)
-                bot_message = parts[-1].strip()
-            else:
-                bot_message = raw_text.strip()
-                
-            return jsonify({"response": bot_message}), 200
-
-    except Exception as e:
-        logger.error("Erro na chamada da API Gemini: %s", str(e))
-        return jsonify({"error": f"Falha na comunicação com o assistente: {str(e)}"}), 500
+    bot_message = _call_gemini_chat(system_instruction, contents)
+    
+    if bot_message is None:
+        return jsonify({"error": "Falha na comunicação com o assistente após tentativas. Tente novamente."}), 500
+    
+    return jsonify({"response": bot_message}), 200
 
 
 
