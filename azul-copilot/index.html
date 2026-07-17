@@ -150,9 +150,7 @@
     .btn-primary { background: var(--azul-destaque); color: var(--branco); }
     .btn-secondary { background: var(--cinza-100); color: var(--cinza-600); }
     .btn-secondary:hover { background: #e6ebf2; }
-    .nav-item { width: 100%; border: none; background: transparent; color: inherit; padding: 12px 14px; border-radius: 12px; text-align: left; margin-bottom: 8px; font-weight: 600; transition: background-color 0.15s ease, transform 0.15s ease; }
-    .nav-item:hover { background: rgba(255,255,255,0.08); transform: translateX(2px); }
-    .nav-item.active { background: rgba(255,255,255,0.12); }
+    .nav-item { cursor: pointer; border: none; background: transparent; font-weight: 600; }
     .muted { font-size: 12px; color: var(--cinza-300); margin-top: 10px; }
 
     .app-shell { display: none; min-height: 100vh; background: var(--cinza-50); }
@@ -163,13 +161,38 @@
     .topbar .sub { font-size: 12px; opacity: 0.75; }
     .user-pill { background: rgba(255,255,255,0.12); padding: 8px 12px; border-radius: 999px; font-size: 13px; }
 
-    .content { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 76px); }
-    .sidebar { background: var(--azul-escuro-secundario); color: #eaf3ff; padding: 22px 18px; }
-    .nav-item { width: 100%; border: none; background: transparent; color: inherit; padding: 12px 14px; border-radius: 12px; text-align: left; margin-bottom: 8px; font-weight: 600; transition: background-color 0.15s ease, transform 0.15s ease; }
-    .nav-item:hover { background: rgba(255,255,255,0.08); transform: translateX(2px); }
-    .nav-item.active { background: rgba(255,255,255,0.12); }
-    .sidebar .small { font-size: 11px; text-transform: uppercase; letter-spacing: 0.16em; opacity: 0.6; margin: 18px 0 10px; padding-left: 6px; }
-    .main { padding: 24px; display: flex; flex-direction: column; gap: 18px; }
+    .content { min-height: calc(100vh - 130px); display: flex; flex-direction: column; }
+    .top-nav {
+      background: var(--azul-escuro-secundario);
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 0 24px;
+      height: 54px;
+    }
+    .top-nav .nav-item {
+      all: unset;
+      cursor: pointer;
+      color: rgba(255,255,255,0.65);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 0 20px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      border-bottom: 3px solid transparent;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .top-nav .nav-item:hover {
+      color: #fff;
+      background: rgba(255,255,255,0.06);
+    }
+    .top-nav .nav-item.active {
+      color: #fff;
+      border-bottom-color: var(--azul-destaque);
+      background: rgba(255,255,255,0.08);
+    }
+    .main { flex: 1; padding: 24px; display: flex; flex-direction: column; gap: 18px; }
     .hero-panel {
       background: linear-gradient(120deg, rgba(59, 158, 255, 0.16), rgba(255,255,255,0.95));
       border: 1px solid rgba(59, 158, 255, 0.18);
@@ -392,6 +415,16 @@
       30% { transform: translateY(-5px); }
     }
 
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.6); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
     .dashboard-summary {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -499,8 +532,8 @@
       .alert-similarity-grid { grid-template-columns: 1fr; }
     }
       .login-screen { grid-template-columns: 1fr; }
-      .content { grid-template-columns: 1fr; }
-      .sidebar { display: flex; flex-wrap: wrap; gap: 8px; }
+      .top-nav { flex-wrap: wrap; height: auto; padding: 8px 16px; gap: 4px; }
+      .top-nav .nav-item { height: 40px; }
       .hero-panel { grid-template-columns: 1fr; }
       .grid-2 { grid-template-columns: 1fr; }
       .project-grid { grid-template-columns: 1fr; }
@@ -602,15 +635,13 @@
       <div class="user-pill" id="userPill">Usuário</div>
     </header>
     <div class="content">
-      <aside class="sidebar">
-        <div class="small">Navegação</div>
+      <nav class="top-nav">
         <button class="nav-item active" data-view="home">Home</button>
-        <button class="nav-item" data-view="inbox">Inbox & Alertas</button>
+        <button class="nav-item" data-view="inbox">Inbox</button>
         <button class="nav-item" data-view="dashboard">Dashboard</button>
         <button class="nav-item" data-view="channel">Canal de Projetos</button>
-        <div class="small">Ações</div>
         <button class="nav-item" id="logoutBtn">Sair</button>
-      </aside>
+      </nav>
       <main class="main">
         <section id="viewHome" class="panel">
           <h3>Home do canal</h3>
@@ -885,6 +916,40 @@
       setTimeout(() => toast.remove(), 2200);
     }
 
+    function showSuccessAnimation() {
+      const overlay = document.createElement('div');
+      overlay.style.cssText = `
+        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+        z-index: 999; background: rgba(10,26,61,0.35); backdrop-filter: blur(3px);
+        animation: fadeIn 0.25s ease;
+      `;
+      overlay.innerHTML = `
+        <div style="
+          display:flex; flex-direction:column; align-items:center; gap:16px;
+          background:white; padding:40px 48px; border-radius:24px;
+          box-shadow:0 20px 60px rgba(0,0,0,0.2);
+          animation: popIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
+        ">
+          <div style="
+            width:72px; height:72px; border-radius:50%; background:var(--success);
+            display:flex; align-items:center; justify-content:center;
+            animation: popIn 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.1s both;
+          ">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </div>
+          <span style="font-size:18px; font-weight:600; color:var(--cinza-900);">Projeto enviado para avaliação</span>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      setTimeout(() => {
+        overlay.style.transition = 'opacity 0.3s ease';
+        overlay.style.opacity = '0';
+        setTimeout(() => overlay.remove(), 300);
+      }, 2200);
+    }
+
     async function loginWithDemo() {
       const btn = document.getElementById('loginBtn');
       btn.disabled = true;
@@ -1045,7 +1110,7 @@
       const userName = state.user?.name;
 
       const conflictAlerts = state.projects.filter(p =>
-        p.marketingAlert && isMarketing && p.createdBy?.userId !== userId
+        p.marketingAlert && (isMarketing || p.createdBy?.userId === userId)
       );
 
       const seenSimKeys = new Set();
@@ -1331,17 +1396,21 @@
         userId: state.user?.id || '',
         userName: state.user?.name || '',
       };
+      showSuccessAnimation();
       const response = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const data = await response.json();
+      if (!response.ok) {
+        showToast(data.error || 'Erro ao submeter projeto');
+        return;
+      }
       state.projects.unshift(data.project);
       renderAlerts();
       renderProjects();
       renderDashboard();
-      showToast('Projeto submetido com alerta de marketing e similaridade analisado.');
       projectForm.reset();
     });
 
